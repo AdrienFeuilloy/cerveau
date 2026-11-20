@@ -28,7 +28,8 @@ const cap1 = s => s.charAt(0).toUpperCase() + s.slice(1);
 const dueLabel = iso => { const n = daysTo(iso); return n === 0 ? "aujourd'hui" : n === 1 ? 'demain' : n === -1 ? 'hier' : n < 0 ? `retard ${-n} j` : n < 7 ? new Date(iso + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long' }) : frDate(iso, { day: 'numeric', month: 'short' }); };
 const plain = s => String(s || '').replace(/\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|([^\]]+))?\]\]/g, (m, a, b) => b || a).replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/[📅✅]\s*\d{4}-\d{2}-\d{2}/gu, '').replace(/[*`]/g, '').replace(/\s+/g, ' ').trim();
 const cleanTitle = s => String(s || '').replace(/[\\/:*?"<>|#^[\]]/g, ' ').replace(/^[.\s]+/, '').replace(/\s+/g, ' ').trim().slice(0, 80).trim();
-function ping(el) { const r = el.getBoundingClientRect(), d = document.createElement('div'); d.className = 'ping'; d.style.left = r.left + r.width / 2 + 'px'; d.style.top = r.top + r.height / 2 + 'px'; document.body.appendChild(d); setTimeout(() => d.remove(), 650); }
+function ping(el) { const r = el.getBoundingClientRect(); for (const c of ['ping x', 'ping', 'ping']) { const d = document.createElement('div'); d.className = c; d.style.left = r.left + r.width / 2 + 'px'; d.style.top = r.top + r.height / 2 + 'px'; document.body.appendChild(d); setTimeout(() => d.remove(), 900); } }
+setInterval(() => { const c = document.querySelector('[data-clock]'); if (c) c.textContent = new Date().toLocaleTimeString('fr-FR'); }, 1000);
 const vibrate = () => { try { navigator.vibrate?.(8); } catch { } };
 
 const ICON = {
@@ -565,7 +566,11 @@ function vToday(I, lateAll) {
     : revDue ? `Tout est calme. C'est <em>le bon moment pour la revue</em> de la semaine.`
     : `Rien d'urgent. Une idée qui passe ? <em>Capture-la</em>, ta tête n'est pas faite pour stocker.`;
   const pend = Object.values(notes).filter(n => n.dirty).length;
-  const hud = `<div class="hud"><span>Notes <b>${I.idx.length}</b></span><span>Boîte <b>${I.box.length}</b></span><span>Tâches ouvertes <b>${I.tasks.filter(t => !t.done).length}</b></span><span>${!ghReady() ? 'Hors ligne · local' : sstate === 'err' ? 'Synchro · erreur' : pend ? `Synchro · ${pend} en attente` : 'Synchro · OK'}</span></div>`;
+  const open = I.tasks.filter(t => !t.done).length, all = I.tasks.length, seg = all ? Math.round((all - open) / all * 10) : 0, z = n => String(n).padStart(3, '0');
+  const st = !ghReady() ? 'Mode local' : sstate === 'err' ? 'Liaison · erreur' : pend ? `Liaison · ${pend} en attente` : 'Liaison GitHub · OK';
+  const hud = `<div class="hud" aria-hidden="true"><svg class="hud-ring" viewBox="0 0 40 40"><circle class="a" cx="20" cy="20" r="18"/><circle class="b" cx="20" cy="20" r="13"/><circle class="c" cx="20" cy="20" r="8"/><circle class="d" cx="20" cy="20" r="3"/></svg>
+    <div class="hud-d"><div class="hud-t"><i class="blip"></i><span>${st}</span><span class="clk" data-clock>${new Date().toLocaleTimeString('fr-FR')}</span></div>
+    <div class="hud-g"><span><b>${z(I.idx.length)}</b>Notes</span><span><b>${z(I.box.length)}</b>Boîte</span><span><b>${z(open)}</b>Tâches</span><span class="seg" title="Tâches faites">${Array.from({ length: 10 }, (_, i) => `<i class="${i < seg ? 'on' : ''}"></i>`).join('')}</span></div></div></div>`;
   let h = domsHTML() + hud + `<p class="lead"><span class="pr">›</span>${lead}</p>`;
   if (late.length || tod.length) h += lbl('À faire aujourd’hui', 'Toutes les tâches', 'taches', late.length ? '' : '') + `<div class="list">${[...late, ...tod].slice(0, 8).map(t => taskRow(t)).join('')}</div>`;
   if (I.box.length) h += lbl(`Boîte de réception · ${I.box.length}`, 'Trier', 'boite') + `<div class="list">${I.box.slice(0, 3).map(noteRow).join('')}</div>`;
@@ -703,7 +708,7 @@ function dueGroup(root, id) {
 function capture(pre = {}) {
   let task = !!pre.task;
   const pan = layer('Capturer', `
-    <textarea class="big" id="capT" placeholder="Une idée, une tâche, un lien…">${esc(pre.text || '')}</textarea>
+    <div class="capw"><textarea class="big" id="capT" placeholder="Une idée, une tâche, un lien…">${esc(pre.text || '')}</textarea><span class="tag">● Écoute</span></div>
     <div class="chips" id="capK"><button type="button" class="chip ${task ? '' : 'on'}" data-v="note">Note</button><button type="button" class="chip ${task ? 'on' : ''}" data-v="tache">Tâche</button></div>
     <div id="capD" ${task ? '' : 'hidden'}><span class="sub" style="margin-top:8px">Échéance</span>${dueChips('capDue', pre.due || '')}</div>
     <span class="sub" style="margin-top:10px">Domaine</span>${domChips('capS', pre.dom ?? sphere)}
