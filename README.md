@@ -37,7 +37,10 @@ Jeton : GitHub → Settings → Developer settings → Personal access tokens �
 ## Capturer depuis le téléphone
 
 - Bouton ＋ de l'appli, ou appui long sur l'icône → « Capturer ».
-- **Partager → Cerveau** depuis n'importe quelle appli (Android, appli installée).
+- **Partager → Cerveau** depuis n'importe quelle appli (Android, appli installée) : textes, liens et photos.
+- Bouton 📷 Photo dans « Capturer » (appareil photo ou galerie).
+
+Les photos sont réduites (1600 px, JPEG) puis rangées dans `Cerveau/Fichiers/`, et insérées dans la note avec `![[nom.jpg]]` (format Obsidian). Elles partent dans le même commit que la note.
 - Sur ordinateur : touche `N` pour capturer, `/` pour chercher, `Ctrl + Entrée` pour valider, `Ctrl + S` pour enregistrer une note.
 
 ## Confier une note à l'assistant

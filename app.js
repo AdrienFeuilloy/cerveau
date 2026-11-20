@@ -26,7 +26,7 @@ const escRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const plural = (n, s, p = s + 's') => `${n} ${n > 1 ? p : s}`;
 const cap1 = s => s.charAt(0).toUpperCase() + s.slice(1);
 const dueLabel = iso => { const n = daysTo(iso); return n === 0 ? "aujourd'hui" : n === 1 ? 'demain' : n === -1 ? 'hier' : n < 0 ? `retard ${-n} j` : n < 7 ? new Date(iso + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long' }) : frDate(iso, { day: 'numeric', month: 'short' }); };
-const plain = s => String(s || '').replace(/\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|([^\]]+))?\]\]/g, (m, a, b) => b || a).replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/[📅✅]\s*\d{4}-\d{2}-\d{2}/gu, '').replace(/[*`]/g, '').replace(/\s+/g, ' ').trim();
+const plain = s => String(s || '').replace(/!\[\[[^\]]*\]\]|!\[[^\]]*\]\([^)]*\)/g, '📷').replace(/\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|([^\]]+))?\]\]/g, (m, a, b) => b || a).replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/[📅✅]\s*\d{4}-\d{2}-\d{2}/gu, '').replace(/[*`]/g, '').replace(/\s+/g, ' ').trim();
 const cleanTitle = s => String(s || '').replace(/[\\/:*?"<>|#^[\]]/g, ' ').replace(/^[.\s]+/, '').replace(/\s+/g, ' ').trim().slice(0, 80).trim();
 function ping(el) { const r = el.getBoundingClientRect(); for (const c of ['ping x', 'ping', 'ping']) { const d = document.createElement('div'); d.className = c; d.style.left = r.left + r.width / 2 + 'px'; d.style.top = r.top + r.height / 2 + 'px'; document.body.appendChild(d); setTimeout(() => d.remove(), 900); } }
 setInterval(() => { const c = document.querySelector('[data-clock]'); if (c) c.textContent = new Date().toLocaleTimeString('fr-FR'); }, 1000);
@@ -127,9 +127,9 @@ function build(fm, body, order = []) {
    notes : { chemin: { text, sha (version GitHub connue), dirty, v, at } }
    ========================================================== */
 let notes = read('notes', {}) || {};
-const meta = Object.assign({ head: null, tree: null, treeSha: null, last: 0, dirty: false, deleted: {}, seeded: false }, read('sync', {}) || {});
+const meta = Object.assign({ head: null, tree: null, treeSha: null, last: 0, dirty: false, deleted: {}, seeded: false, files: {}, media: [] }, read('sync', {}) || {});
 function persist() {
-  meta.dirty = Object.values(notes).some(n => n.dirty) || Object.keys(meta.deleted).length > 0;
+  meta.dirty = Object.values(notes).some(n => n.dirty) || Object.keys(meta.deleted).length > 0 || meta.media.length > 0;
   write('notes', notes); write('sync', meta);
 }
 function createNote(p, text) {
@@ -184,12 +184,67 @@ async function blobSha(text) {
   const all = new Uint8Array(head.length + body.length); all.set(head); all.set(body, head.length);
   return [...new Uint8Array(await crypto.subtle.digest('SHA-1', all))].map(b => b.toString(16).padStart(2, '0')).join('');
 }
+/* ---------- Images : rangées dans <dossier>/Fichiers/, insérées dans les notes avec ![[nom.jpg]] (comme Obsidian) ---------- */
+const isImgName = n => /\.(jpe?g|png|gif|webp|heic|avif)$/i.test(n);
+const isMedia = p => isImgName(p) && p.startsWith(R());
+const MIME = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp', heic: 'image/heic', avif: 'image/avif' };
+function idb() {
+  return new Promise((res, rej) => { const r = indexedDB.open('cerveau', 1); r.onupgradeneeded = () => { for (const s of ['share', 'media', 'pending']) if (!r.result.objectStoreNames.contains(s)) r.result.createObjectStore(s); }; r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+}
+const idbDo = (s, mode, f) => idb().then(d => new Promise((res, rej) => { const q = f(d.transaction(s, mode).objectStore(s)); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }));
+const idbGet = (s, k) => idbDo(s, 'readonly', o => o.get(k)).catch(() => null);
+const idbPut = (s, k, v) => idbDo(s, 'readwrite', o => o.put(v, k));
+const idbDel = (s, k) => idbDo(s, 'readwrite', o => o.delete(k)).catch(() => { });
+const blobToB64 = b => new Promise(r => { const f = new FileReader(); f.onload = () => r(String(f.result).split(',')[1]); f.readAsDataURL(b); });
+// Photo réduite (1600 px, JPEG) avant l'envoi : le dépôt reste léger
+async function shrink(file) {
+  const ext0 = ((file.name || '').split('.').pop() || (file.type || '').split('/')[1] || 'jpg').toLowerCase().replace('jpeg', 'jpg');
+  try {
+    const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' });
+    const k = Math.min(1, 1600 / Math.max(bmp.width, bmp.height)), c = document.createElement('canvas');
+    c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+    c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+    const b = await new Promise(r => c.toBlob(r, 'image/jpeg', .82));
+    return b && (b.size < file.size || !/^(jpg|png|webp)$/.test(ext0)) ? { blob: b, ext: 'jpg' } : { blob: file, ext: ext0 };
+  } catch { return { blob: file, ext: ext0 }; }
+}
+async function addMedia(blob, ext, n = 1) {
+  const d = new Date(), st = `${today()}-${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}${String(d.getSeconds()).padStart(2, '0')}`;
+  let name = `${st}-${n}.${ext}`, i = n; while (meta.files[`${R()}Fichiers/${name}`] || meta.media.includes(`${R()}Fichiers/${name}`)) name = `${st}-${++i}.${ext}`;
+  const path = `${R()}Fichiers/${name}`;
+  await idbPut('media', path, blob); await idbPut('pending', path, blob);
+  meta.media.push(path); persist();
+  return name;
+}
+const urls = new Map();
+async function mediaURL(name) {
+  if (urls.has(name)) return urls.get(name);
+  const path = [...meta.media, ...Object.keys(meta.files)].find(p => p.split('/').pop() === name);
+  if (!path) return null;
+  let blob = await idbGet('media', path);
+  if (!blob && meta.files[path] && ghReady()) {
+    const j = await gh(`/git/blobs/${meta.files[path]}`), bin = atob(j.content.replace(/\s/g, '')), u = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+    blob = new Blob([u], { type: MIME[path.split('.').pop().toLowerCase()] || 'image/jpeg' });
+    idbPut('media', path, blob).catch(() => { });
+  }
+  if (!blob) return null;
+  const url = URL.createObjectURL(blob); urls.set(name, url); return url;
+}
+function hydrate(root) {
+  if (!root) return;
+  $$('img[data-att]:not([src])', root).forEach(async im => {
+    try { const u = await mediaURL(unesc(im.dataset.att)); if (u) { im.src = u; im.onclick = () => window.open(u, '_blank'); } else im.replaceWith(Object.assign(document.createElement('span'), { className: 'att-miss', textContent: '📷 ' + im.dataset.att })); }
+    catch { }
+  });
+}
+
 async function remoteTree(commitSha) {
   const c = await gh(`/git/commits/${commitSha}`);
   const t = await gh(`/git/trees/${c.tree.sha}?recursive=1`);
-  const map = {};
-  for (const e of t.tree || []) if (e.type === 'blob' && isNotePath(e.path)) map[e.path] = e.sha;
-  return { map, treeSha: c.tree.sha };
+  const map = {}, files = {};
+  for (const e of t.tree || []) if (e.type === 'blob') { if (isNotePath(e.path)) map[e.path] = e.sha; else if (isMedia(e.path)) files[e.path] = e.sha; }
+  return { map, files, treeSha: c.tree.sha };
 }
 async function fetchBlobs(list) {
   const out = {}; let i = 0;
@@ -246,19 +301,21 @@ async function sync() {
       const head = ref.object.sha;
       let remote, treeSha;
       if (head === meta.head && meta.tree && meta.treeSha) { remote = { ...meta.tree }; treeSha = meta.treeSha; }
-      else ({ map: remote, treeSha } = await remoteTree(head));
+      else { let files; ({ map: remote, files, treeSha } = await remoteTree(head)); meta.files = files; }
       await pull(remote);
       if (!meta.seeded) { if (!Object.keys(remote).length && !Object.keys(notes).some(isNotePath)) seed(); meta.seeded = true; }
       const ch = [];
       for (const [p, n] of Object.entries(notes)) if (n.dirty && isNotePath(p)) ch.push({ path: p, text: n.text, v: n.v });
       for (const p of Object.keys(meta.deleted)) if (p in remote) ch.push({ path: p, del: true });
+      for (const p of meta.media) { const blob = await idbGet('pending', p); if (!blob) continue; const r = await gh('/git/blobs', { method: 'POST', body: { content: await blobToB64(blob), encoding: 'base64' } }); ch.push({ path: p, sha: r.sha, media: true }); }
       if (!ch.length) { meta.head = head; meta.tree = remote; meta.treeSha = treeSha; break; }
-      const tree = await gh('/git/trees', { method: 'POST', body: { base_tree: treeSha, tree: ch.map(c => c.del ? { path: c.path, mode: '100644', type: 'blob', sha: null } : { path: c.path, mode: '100644', type: 'blob', content: c.text }) } });
-      const nc = await gh('/git/commits', { method: 'POST', body: { message: `Cerveau : ${plural(ch.length, 'note')} (${new Date().toLocaleString('fr-FR')})`, tree: tree.sha, parents: [head] } });
+      const tree = await gh('/git/trees', { method: 'POST', body: { base_tree: treeSha, tree: ch.map(c => c.del ? { path: c.path, mode: '100644', type: 'blob', sha: null } : c.media ? { path: c.path, mode: '100644', type: 'blob', sha: c.sha } : { path: c.path, mode: '100644', type: 'blob', content: c.text }) } });
+      const nc = await gh('/git/commits', { method: 'POST', body: { message: `Cerveau : ${plural(ch.filter(c => !c.media).length, 'note')}${ch.some(c => c.media) ? ` + ${plural(ch.filter(c => c.media).length, 'image')}` : ''} (${new Date().toLocaleString('fr-FR')})`, tree: tree.sha, parents: [head] } });
       try { await gh(`/git/refs/heads/${branch}`, { method: 'PATCH', body: { sha: nc.sha, force: false } }); }
       catch (e) { if ([409, 422].includes(e.status) && attempt < 3) continue; throw e; } // un autre appareil a écrit entre-temps : on recommence
       for (const c of ch) {
         if (c.del) { delete remote[c.path]; delete meta.deleted[c.path]; continue; }
+        if (c.media) { meta.files[c.path] = c.sha; meta.media = meta.media.filter(x => x !== c.path); await idbDel('pending', c.path); continue; }
         const sha = await blobSha(c.text); remote[c.path] = sha;
         const n = notes[c.path]; if (n) { n.sha = sha; if (n.v === c.v) n.dirty = false; }
       }
@@ -396,6 +453,8 @@ function appendTo(path, { text, task, due }) {
 function inline(s) {
   let t = esc(s); const codes = [];
   t = t.replace(/`([^`]+)`/g, (m, c) => `\u0000${codes.push(c) - 1}\u0000`)
+    .replace(/!\[\[([^\]|]+)(?:\|[^\]]*)?\]\]/g, (m, a) => isImgName(unesc(a)) ? `<img class="att" data-att="${a.trim()}" alt="">` : m)
+    .replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (m, alt, u) => /^https?:/.test(unesc(u)) ? `<img class="att" src="${u}" alt="${alt}">` : `<img class="att" data-att="${(() => { try { return decodeURIComponent(unesc(u)); } catch { return unesc(u); } })().split('/').pop()}" alt="${alt}">`)
     .replace(/\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|([^\]]+))?\]\]/g, (m, a, b) => `<a href="#" data-wl="${a.trim()}" class="${findByTitle(unesc(a.trim())) ? '' : 'miss'}">${b || a}</a>`)
     .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
     .replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g, (m, p, u) => `${p}<a href="${u}" target="_blank" rel="noopener">${u.length > 46 ? u.slice(0, 44) + '…' : u}</a>`)
@@ -444,7 +503,7 @@ function layer(title, html, { page = false, onClose, actions = '' } = {}) {
   $('[data-close]', ov).innerHTML = ico(page ? 'back' : 'x');
   $('h2', ov).textContent = title;
   $('.pa', ov).innerHTML = actions;
-  const b = $('.pb', ov); b.innerHTML = html; b.scrollTop = 0;
+  const b = $('.pb', ov); b.innerHTML = html; b.scrollTop = 0; hydrate(b);
   ovClose = onClose || null;
   if (!was) { ov.hidden = false; document.body.style.overflow = 'hidden'; history.pushState({ ov: 1 }, ''); }
   return $('.pan', ov);
@@ -508,7 +567,7 @@ function shell() {
         <div class="acts"><button class="ib" data-act="sync" aria-label="Synchroniser"><span data-sync class="sync"></span></button><button class="ib" data-view="boite" aria-label="Boîte">${ico('inbox')}<span class="bdg" id="bdg" hidden></span></button><button class="ib" data-act="search" aria-label="Rechercher">${ico('search')}</button><button class="ib" data-act="settings" aria-label="Réglages">${ico('set')}</button></div>
       </header>
       <div id="view"></div>
-      <p class="foot">Cerveau · v1.1.0</p>
+      <p class="foot">Cerveau · v1.2.0</p>
     </div></main>
     <nav class="tabs">
       <button data-view="today">${ico('today')}Aujourd’hui</button><button data-view="projets">${ico('proj')}Projets</button>
@@ -531,7 +590,7 @@ function render() {
   $('#sideDoms').innerHTML = [['', 'Tout'], ...SPHERES.map(s => [s.id, s.id])].map(([k, l]) => `<button class="nav ${sphere === k ? 'on' : ''}" data-sph="${esc(k)}">${k ? dot(k) : '<span class="dot" style="--c:var(--ink)"></span>'}${esc(l)}</button>`).join('');
   $$('[data-view]').forEach(b => b.classList.toggle('on', b.dataset.view === view));
   $('#view').innerHTML = { today: vToday, projets: vProjets, taches: vTaches, notes: vNotes, boite: vBoite }[view](I, late);
-  bindView();
+  bindView(); hydrate($('#view'));
   if (view === 'today' && !typed && meta.last) typeLead();
   paint(sstate, serr);
   document.title = (I.box.length ? `(${I.box.length}) ` : '') + 'Cerveau';
@@ -714,7 +773,9 @@ function capture(pre = {}) {
   let task = !!pre.task;
   const pan = layer('Capturer', `
     <div class="capw"><textarea class="big" id="capT" placeholder="Une idée, une tâche, un lien…">${esc(pre.text || '')}</textarea><span class="tag">● Écoute</span></div>
+    <div class="thumbs" id="capI"></div>
     <div class="chips" id="capK"><button type="button" class="chip ${task ? '' : 'on'}" data-v="note">Note</button><button type="button" class="chip ${task ? 'on' : ''}" data-v="tache">Tâche</button></div>
+    <div class="chips" style="margin-top:6px"><button type="button" class="chip" id="capP">📷 Photo</button></div>
     <label class="askchk"><input type="checkbox" id="capA" ${pre.ask ? 'checked' : ''}> ◆ Pour l’assistant <small>la note est la consigne</small></label>
     <div id="capD" ${task ? '' : 'hidden'}><span class="sub" style="margin-top:8px">Échéance</span>${dueChips('capDue', pre.due || '')}</div>
     <span class="sub" style="margin-top:10px">Domaine</span>${domChips('capS', pre.dom ?? sphere)}
@@ -722,15 +783,26 @@ function capture(pre = {}) {
     <button class="btn block" id="capOk">Capturer</button>
     <p class="hint" style="text-align:center;margin-top:12px">Depuis une autre appli du téléphone : <b>Partager → Cerveau</b>.</p>`);
   const getS = chipGroup(pan, 'capS'), getDue = dueGroup(pan, 'capDue');
+  const imgs = [];
+  const drawImgs = () => { $('#capI', pan).innerHTML = imgs.map((m, i) => `<span class="th"><img src="${m.url}" alt=""><button type="button" data-rm="${i}" aria-label="Retirer">×</button></span>`).join(''); };
+  const addFiles = async files => { for (const f of files) if (/^image\//.test(f.type) || /\.(jpe?g|png|gif|webp|heic|avif)$/i.test(f.name || '')) { const r = await shrink(f); imgs.push({ ...r, url: URL.createObjectURL(r.blob) }); } drawImgs(); };
+  $('#capI', pan).onclick = e => { const b = e.target.closest('[data-rm]'); if (b) { imgs.splice(+b.dataset.rm, 1); drawImgs(); } };
+  $('#capP', pan).onclick = () => { const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*'; i.multiple = true; i.onchange = () => addFiles([...i.files]); i.click(); };
+  if (pre.files?.length) addFiles(pre.files);
   chipGroup(pan, 'capK', v => { task = v === 'tache'; $('#capD', pan).hidden = !task; });
   setTimeout(() => $('#capT', pan)?.focus(), 120);
   $('#capT', pan).onkeydown = e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) $('#capOk', pan).click(); };
-  $('#capOk', pan).onclick = () => {
-    const text = $('#capT', pan).value.trim(); if (!text) return toast('Écris quelque chose');
+  $('#capOk', pan).onclick = async () => {
+    let text = $('#capT', pan).value.trim(); if (!text && !imgs.length) return toast('Écris quelque chose');
+    const btn = $('#capOk', pan); btn.disabled = true;
+    const embeds = []; for (let i = 0; i < imgs.length; i++) embeds.push(`![[${await addMedia(imgs[i].blob, imgs[i].ext, i + 1)}]]`);
+    const plainText = text;
+    if (!text) text = `Photo du ${frDate(today(), { day: 'numeric', month: 'short' })} à ${new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }).replace(':', 'h')}`;
     const to = $('#capTo', pan).value, due = task ? getDue() : '', dom = getS(), ask = $('#capA', pan).checked;
-    if (to && notes[to] && !ask) { appendTo(to, { text, task, due }); toast(`Ajouté à « ${titleOf(to)} »`); }
+    if (to && notes[to] && !ask) { if (plainText || !embeds.length) appendTo(to, { text, task, due }); if (embeds.length) appendTo(to, { text: embeds.join('\n') + '\n', task: false }); toast(`Ajouté à « ${titleOf(to)} »`); }
     else {
-      const b = task ? text.split('\n').filter(l => l.trim()).map(l => TASK.test(l.trim()) ? l.trim() : `- [ ] ${l.trim()}${due ? ' 📅 ' + due : ''}`).join('\n') : text;
+      let b = task ? text.split('\n').filter(l => l.trim()).map(l => TASK.test(l.trim()) ? l.trim() : `- [ ] ${l.trim()}${due ? ' 📅 ' + due : ''}`).join('\n') : text;
+      if (embeds.length) b = (plainText ? b + '\n\n' : '') + embeds.join('\n');
       createNote(uniquePath(dirOf('boite'), firstLine(text) || 'Capture'), build({ cree: today(), domaine: dom || undefined, ...(ask ? { assistant: 'à traiter', demande: today(), ...(to && notes[to] ? { consigne: `Concerne [[${titleOf(to)}]]` } : {}) } : {}) }, b + '\n'));
       toast(ask ? 'Confiée à l’assistant ◆' : 'Dans la boîte');
     }
@@ -830,7 +902,7 @@ function openNote(path) {
     const b = e.target.closest('[data-tl]'); if (!b) return;
     const i = +b.dataset.tl;
     if (toggleLine(path, i, notes[path].text.split('\n')[i])) ping(b);
-    const y = info(path); $('#nMd', pan).innerHTML = md(y.body, notes[path].text.split('\n').length - y.body.split('\n').length); render();
+    const y = info(path); $('#nMd', pan).innerHTML = md(y.body, notes[path].text.split('\n').length - y.body.split('\n').length); hydrate($('#nMd', pan)); render();
   });
   const on = (s, f) => { const el = $(s, pan); if (el) el.onclick = f; };
   on('#nEd', () => editNote(path));
@@ -1029,7 +1101,10 @@ render();
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) navigator.serviceWorker.register('./sw.js').then(r => r.update()).catch(() => { });
 // Partage depuis une autre appli (Android : « Partager → Cerveau ») ou raccourci « Capturer »
 const sp = new URLSearchParams(location.search);
-if (['capture', 'text', 'url', 'title'].some(k => sp.has(k))) {
+if (sp.has('share')) {
+  history.replaceState(null, '', location.pathname);
+  idbGet('share', 'last').then(d => { idbDel('share', 'last'); if (!d) return; const text = [d.title && !(d.text || '').includes(d.title) ? d.title : '', d.text, d.url && !(d.text || '').includes(d.url) ? d.url : ''].filter(Boolean).join('\n'); capture({ text, files: d.files || [] }); });
+} else if (['capture', 'text', 'url', 'title'].some(k => sp.has(k))) {
   const url = sp.get('url') || '', txt = sp.get('text') || '', ttl = sp.get('title') || '';
   const text = [ttl && !txt.includes(ttl) ? ttl : '', txt, url && !txt.includes(url) ? url : ''].filter(Boolean).join('\n');
   history.replaceState(null, '', location.pathname);
