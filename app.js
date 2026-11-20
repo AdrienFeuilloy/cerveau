@@ -574,7 +574,7 @@ function shell() {
         <div class="acts"><button class="ib" data-act="sync" aria-label="Synchroniser"><span data-sync class="sync"></span></button><button class="ib" data-view="boite" aria-label="Boîte">${ico('inbox')}<span class="bdg" id="bdg" hidden></span></button><button class="ib" data-act="search" aria-label="Rechercher">${ico('search')}</button><button class="ib" data-act="settings" aria-label="Réglages">${ico('set')}</button></div>
       </header>
       <div id="view"></div>
-      <p class="foot">Cerveau · v1.6.0</p>
+      <p class="foot">Cerveau · v1.6.1</p>
     </div></main>
     <nav class="tabs">
       <button data-view="today">${ico('today')}Aujourd’hui</button><button data-view="projets">${ico('proj')}Projets</button>
@@ -1157,7 +1157,7 @@ function splash() {
   const log = [`Initialisation du noyau`, `Liaison GitHub ${'.'.repeat(8)} ${ghReady() ? 'OK' : 'LOCAL'}`, `${String(nNotes).padStart(3, '0')} notes indexées · ${String(nBox).padStart(3, '0')} en boîte`, `Perso · Salarié · PhantStudio : en ligne`, `Systèmes prêts. Bonjour.`];
   const el = document.createElement('div'); el.className = 'splash'; el.setAttribute('aria-hidden', 'true');
   el.innerHTML = `<svg class="sp-logo" viewBox="0 0 200 200">
-      <defs><radialGradient id="spg"><stop offset="0" stop-color="#ffd6a0"/><stop offset=".35" stop-color="#ff9a2e" stop-opacity=".55"/><stop offset="1" stop-color="#ff9a2e" stop-opacity="0"/></radialGradient></defs>
+      <defs><radialGradient id="spg"><stop class="sp-stop0" offset="0"/><stop class="sp-stop1" offset=".35"/><stop class="sp-stop2" offset="1"/></radialGradient></defs>
       <circle class="sp-glow" cx="100" cy="100" r="70" fill="url(#spg)"/>
       <circle class="sp-ticks" cx="100" cy="100" r="82"/>
       <circle class="sp-thin" cx="100" cy="100" r="70" pathLength="100"/>
@@ -1165,7 +1165,7 @@ function splash() {
       <g class="sp-radar"><path d="M100 100 L${P(-90, 48)} A48 48 0 0 1 ${P(-30, 48)} Z"/></g>
       <circle class="sp-dash" cx="100" cy="100" r="48"/>
       <polygon class="sp-tri" points="${nodes.map(n => n.join(',')).join(' ')}" pathLength="100"/>
-      ${nodes.map(([x, y], i) => `<g class="sp-node" style="--i:${i};transform-origin:${x}px ${y}px"><circle cx="${x}" cy="${y}" r="13" fill="#0b0c0e"/><circle cx="${x}" cy="${y}" r="9.5" fill="${['#79b88b', '#7fa3e0', '#e8865c'][i]}"/></g>`).join('')}
+      ${nodes.map(([x, y], i) => `<g class="sp-node" style="--i:${i};transform-origin:${x}px ${y}px"><circle cx="${x}" cy="${y}" r="13"/><circle cx="${x}" cy="${y}" r="9.5" style="fill:${['#79b88b', '#7fa3e0', '#e8865c'][i]}"/></g>`).join('')}
       <circle class="sp-core" cx="100" cy="100" r="9"/>
     </svg>
     <div class="sp-name" data-txt="CERVEAU">&nbsp;</div>
