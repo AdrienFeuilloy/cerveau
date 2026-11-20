@@ -545,13 +545,17 @@ function projRow(p) {
   const late = isISO(p.fm.echeance) && p.fm.echeance < today() && p.fm.statut !== 'terminé';
   return `<button class="row" data-open="${esc(p.path)}"><span class="gl" style="color:${sc(p.dom)}">${ico('proj', 18)}</span><span class="m"><span class="t" style="font-family:var(--serif);font-size:16.5px">${esc(p.title)}</span><span class="s">${nx ? '→ ' + esc(plain(nx.text)) : ts.length ? 'Tout est fait' : 'Aucune tâche'}</span><span class="bar" style="--c:${sc(p.dom)}"><i style="width:${pc}%"></i></span></span><span class="r">${isISO(p.fm.echeance) ? `<span class="${late ? 'late' : ''}">${frDate(p.fm.echeance, { day: 'numeric', month: 'short' })}</span><br>` : ''}${ts.length ? `${d}/${ts.length}` : ''}</span></button>`;
 }
+// Mini bloc d'instruments en tête de chaque écran (touche HUD)
+const z3 = n => String(n).padStart(3, '0');
+const ring = () => `<svg class="mr" viewBox="0 0 20 20" aria-hidden="true"><circle class="a" cx="10" cy="10" r="8.5"/><circle class="b" cx="10" cy="10" r="5"/><circle class="d" cx="10" cy="10" r="1.6"/></svg>`;
+const hudm = (left, right = '', cls = '') => `<div class="hudm brk ${cls}" aria-hidden="true">${ring()}<span>${left}</span>${right ? `<span class="rt">${right}</span>` : ''}</div>`;
 const askRow = x => `<button class="row" data-open="${esc(x.path)}"><span class="gl ask">◆</span><span class="m"><span class="t">${esc(x.title)}</span><span class="s">${esc(plain(x.fm.consigne || '') || excerpt(x) || 'Consigne dans la note')}</span></span><span class="r">${x.fm.demande ? frDate(x.fm.demande, { day: 'numeric', month: 'short' }) : ''}</span></button>`;
 const noteRow = x => `<button class="row" data-open="${esc(x.path)}"><span class="gl${x.ask ? ' ask' : ''}">${x.ask ? '◆' : dot(x.dom) || '<span class="dot" style="--c:var(--line)"></span>'}</span><span class="m"><span class="t">${esc(x.title)}</span><span class="s">${esc(excerpt(x) || x.sub || KIND(x.kind)?.label || '')}</span></span><span class="r">${x.stamp ? frDate(new Date(x.stamp).toISOString().slice(0, 10), { day: 'numeric', month: 'short' }) : ''}</span></button>`;
 
 function shell() {
   document.body.innerHTML = `<div class="app">
     <aside class="side">
-      <div class="brand">Cerveau</div><div class="kick">Second cerveau · PARA</div>
+      <div class="brand">${ring()}Cerveau</div><div class="kick">Second cerveau · PARA</div>
       <button class="btn capb" data-cap>${ico('plus', 18)} Capturer <span style="margin-left:auto;font:500 11px var(--mono);opacity:.6">N</span></button>
       ${['today', 'boite', 'projets', 'taches', 'notes'].map(v => `<button class="nav" data-view="${v}">${ico({ today: 'today', boite: 'inbox', projets: 'proj', taches: 'task', notes: 'notes' }[v], 18)}${VIEWS[v]}<span class="c" data-count="${v}"></span></button>`).join('')}
       <div class="sep">Domaines</div>
@@ -567,7 +571,7 @@ function shell() {
         <div class="acts"><button class="ib" data-act="sync" aria-label="Synchroniser"><span data-sync class="sync"></span></button><button class="ib" data-view="boite" aria-label="Boîte">${ico('inbox')}<span class="bdg" id="bdg" hidden></span></button><button class="ib" data-act="search" aria-label="Rechercher">${ico('search')}</button><button class="ib" data-act="settings" aria-label="Réglages">${ico('set')}</button></div>
       </header>
       <div id="view"></div>
-      <p class="foot">Cerveau · v1.2.0</p>
+      <p class="foot">Cerveau · v1.3.0</p>
     </div></main>
     <nav class="tabs">
       <button data-view="today">${ico('today')}Aujourd’hui</button><button data-view="projets">${ico('proj')}Projets</button>
@@ -648,7 +652,7 @@ function vToday(I, lateAll) {
 /* ---------- Boîte ---------- */
 function vBoite(I) {
   if (!I.box.length) return `<p class="lead">Boîte vide. <em>Rien ne traîne</em>, ni ici ni dans ta tête.</p><div class="btns"><button class="btn" data-cap>＋ Capturer</button></div>`;
-  return `<p class="lead">Pour chaque élément, une seule question : <em>où est-ce que ça me sera utile ?</em></p><div class="btns" style="margin-bottom:6px"><button class="btn" data-act="triall">Trier pas à pas (${I.box.length})</button></div>` +
+  return hudm(`File d'attente ▸ <b>${z3(I.box.length)}</b> élément${I.box.length > 1 ? 's' : ''}`, '<span class="blink">● Tri requis</span>') + `<p class="lead">Pour chaque élément, une seule question : <em>où est-ce que ça me sera utile ?</em></p><div class="btns" style="margin-bottom:6px"><button class="btn" data-act="triall">Trier pas à pas (${I.box.length})</button></div>` +
     `<div class="list" style="margin-top:14px">${I.box.map(x => `<div class="row"><span class="gl">${dot(x.dom) || '<span class="dot" style="--c:var(--line)"></span>'}</span><span class="m"><span class="t clk" data-open="${esc(x.path)}" style="cursor:pointer;white-space:normal;font-family:var(--serif);font-size:16.5px">${esc(x.title)}</span>${x.body.trim() ? `<div class="doc" style="font-size:13.5px;color:var(--ink2);max-height:120px;overflow:hidden;margin-top:4px">${md(x.body)}</div>` : ''}<div class="btns" style="margin-top:8px"><button class="btn sm" data-classify="${esc(x.path)}" style="flex:0">Trier</button><button class="btn sm line" data-open="${esc(x.path)}" style="flex:0">Ouvrir</button></div></span><span class="r">${x.fm.cree ? frDate(x.fm.cree, { day: 'numeric', month: 'short' }) : ''}</span></div>`).join('')}</div>`;
 }
 
@@ -658,7 +662,8 @@ function vProjets(I) {
   const all = I.idx.filter(x => isP(x) && inS(x)), st = x => x.fm.statut || 'actif';
   const inF = (x, k) => st(x) === k && (k === 'terminé' || x.kind === 'projet');
   const L = all.filter(x => inF(x, projFilter)).sort((a, b) => (a.fm.echeance || '9').localeCompare(b.fm.echeance || '9') || byTitle(a, b));
-  let h = domsHTML() + `<div class="chips">${STATUTS.map(([k, l]) => `<button class="chip ${projFilter === k ? 'on' : ''}" data-pf="${k}">${l} <span style="opacity:.6">${all.filter(x => inF(x, k)).length}</span></button>`).join('')}</div>`;
+  const act = I.projs.filter(x => (x.fm.statut || 'actif') === 'actif' && inS(x)), at = act.flatMap(tasksOf), pc = at.length ? Math.round(at.filter(t => t.done).length * 100 / at.length) : 0;
+  let h = domsHTML() + hudm(`Module projets ▸ <b>${z3(act.length)}</b> en cours · <b>${z3(I.doms.filter(inS).length)}</b> domaines`, `Avancement <b>${pc}%</b>`) + `<div class="chips">${STATUTS.map(([k, l]) => `<button class="chip ${projFilter === k ? 'on' : ''}" data-pf="${k}">${l} <span style="opacity:.6">${all.filter(x => inF(x, k)).length}</span></button>`).join('')}</div>`;
   h += `<div class="list">${L.length ? L.map(projRow).join('') : `<p class="empty">${projFilter === 'actif' ? 'Aucun projet en cours.' : 'Rien ici.'}</p>`}</div><div class="btns"><button class="btn line" data-act="newproj">＋ Nouveau projet</button></div>`;
   const D = I.doms.filter(inS).sort(byTitle);
   h += lbl('Domaines', '＋ Ajouter', 'newdom') + `<div class="list">${D.length ? D.map(x => { const o = tasksOf(x).filter(t => !t.done).length; return `<button class="row" data-open="${esc(x.path)}"><span class="gl">${dot(x.dom)}</span><span class="m"><span class="t" style="font-family:var(--serif);font-size:16.5px">${esc(x.title)}</span><span class="s">${esc(excerpt(x))}</span></span><span class="r">${o ? plural(o, 'tâche') : ''}</span></button>`; }).join('') : '<p class="empty">Aucun domaine.</p>'}</div>`;
@@ -669,7 +674,8 @@ function vProjets(I) {
 function vTaches(I) {
   const all = I.tasks.filter(inS2);
   const tgt = sphere && I.doms.find(d => d.title === sphere);
-  let h = domsHTML() + `<div class="chips"><button class="chip ${showDone ? '' : 'on'}" data-sd="0">À faire <span style="opacity:.6">${all.filter(t => !t.done).length}</span></button><button class="chip ${showDone ? 'on' : ''}" data-sd="1">Faites</button></div>`;
+  const op = all.filter(t => !t.done), lt = op.filter(t => t.due && t.due < today()).length, wk = op.filter(t => t.due && t.due <= addDays(today(), 7)).length;
+  let h = domsHTML() + hudm(`<b>${z3(op.length)}</b> ouvertes · <b class="${lt ? 'warn' : ''}">${z3(lt)}</b> en retard`, `Charge 7 j <b>${z3(wk)}</b>`) + `<div class="chips"><button class="chip ${showDone ? '' : 'on'}" data-sd="0">À faire <span style="opacity:.6">${all.filter(t => !t.done).length}</span></button><button class="chip ${showDone ? 'on' : ''}" data-sd="1">Faites</button></div>`;
   h += `<div class="qadd"><span class="ck"></span><input id="qT" placeholder="Nouvelle tâche → ${esc(tgt ? tgt.title : 'boîte de réception')}" enterkeyhint="done"><button class="btn sm" id="qOk">Ajouter</button></div>`;
   if (showDone) {
     const D = all.filter(t => t.done).sort((a, b) => (b.doneAt || '').localeCompare(a.doneAt || '')).slice(0, 60);
@@ -685,7 +691,7 @@ function vTaches(I) {
 /* ---------- Notes (PARA) ---------- */
 function vNotes(I) {
   const L = I.idx.filter(inS);
-  let h = domsHTML() + `<label class="search">${ico('search')}<input id="nq" value="${esc(nq)}" placeholder="Chercher dans toutes les notes…"></label>`;
+  let h = domsHTML() + hudm(`Index ▸ <b>${z3(L.length)}</b> notes · <b>${z3(Object.keys(meta.files).length + meta.media.length)}</b> images`, meta.last ? `Màj ${new Date(meta.last).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}` : 'Local') + `<label class="search">${ico('search')}<input id="nq" value="${esc(nq)}" placeholder="Chercher dans toutes les notes…"></label>`;
   if (nq.trim()) { const X = hits(nq); return h + `<div class="list">${X.length ? X.map(noteRow).join('') : '<p class="empty">Rien trouvé.</p>'}</div>`; }
   UI.open ||= {};
   for (const k of [...KINDS, { id: 'autre', label: 'À la racine', n: '·' }]) {
@@ -888,10 +894,11 @@ function openNote(path) {
     x.ask ? '<span class="askb">◆ Assistant · à traiter</span>' : x.asked ? `<span class="askb done">◆ Traité${isISO(x.fm.traite) ? ' le ' + frDate(x.fm.traite, { day: 'numeric', month: 'short' }) : ''}</span>` : '',
     ...[].concat(x.fm.tags || []).map(t => `<span>#${esc(t)}</span>`)].filter(Boolean).join('');
   const pan = layer('', `
+    ${hudm(`Fichier ▸ ${esc(KIND(x.kind)?.short || 'Note')}`, `${z3(notes[path].text.split('\n').length)} lignes · ${(new Blob([notes[path].text]).size / 1024).toFixed(1).replace('.', ',')} Ko`)}
     <div class="ntitle">${esc(x.title)}</div>
     <div class="nmeta">${metaBits}</div>
     ${x.ask && x.fm.consigne ? `<div class="askbox"><span>◆ Consigne pour l’assistant</span>${esc(x.fm.consigne)}</div>` : ''}
-    <div class="doc" id="nMd">${md(x.body, offset) || '<p class="empty">Note vide. Touche le crayon pour écrire.</p>'}</div>
+    <div class="doc scan" id="nMd">${md(x.body, offset) || '<p class="empty">Note vide. Touche le crayon pour écrire.</p>'}</div>
     ${back.length ? lbl('Mentionnée dans') + `<div class="list">${back.map(noteRow).join('')}</div>` : ''}
     <div class="btns" style="margin-top:26px">${x.kind === 'boite' ? '<button class="btn" id="nCl">Trier</button>' : ''}<button class="btn line" id="nMv">Déplacer</button><button class="btn line askbtn" id="nAsk">◆ ${x.ask ? 'Consigne' : 'Confier à l’assistant'}</button>
       ${isProj && x.fm.statut !== 'terminé' ? '<button class="btn line" id="nEnd">Projet terminé</button>' : ''}
@@ -1040,7 +1047,7 @@ function review() {
 function search() {
   const pan = layer('Rechercher', `<label class="search">${ico('search')}<input id="sQ" placeholder="Titre, mot, #étiquette…" autocomplete="off"></label><div id="sR"></div>`);
   const q = $('#sQ', pan), out = $('#sR', pan);
-  const draw = () => { const v = q.value.trim(); if (!v) { out.innerHTML = '<p class="empty">Tape quelques lettres.</p>'; return; } const L = hits(v); out.innerHTML = `<div class="list">${L.length ? L.map(noteRow).join('') : '<p class="empty">Rien trouvé.</p>'}</div>`; };
+  const draw = () => { const v = q.value.trim(); if (!v) { out.innerHTML = '<p class="empty">Tape quelques lettres.</p>'; return; } const L = hits(v); out.innerHTML = hudm(`Recherche ▸ « ${esc(v)} »`, `<b>${z3(L.length)}</b> résultat${L.length > 1 ? 's' : ''}`) + `<div class="list">${L.length ? L.map(noteRow).join('') : '<p class="empty">Rien trouvé.</p>'}</div>`; };
   q.oninput = draw; draw(); setTimeout(() => q.focus(), 120);
   q.onkeydown = e => { if (e.key === 'Enter') { const f = $('[data-open]', out); if (f) openNote(f.dataset.open); } };
 }
