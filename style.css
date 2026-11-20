@@ -223,7 +223,7 @@ a[data-wl].miss{opacity:.55}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 
 /* ---------- Touches « assistant » : HUD orange, peu nombreuses mais assumées ---------- */
-:root{--hud:#e06a00;--hud-soft:rgba(224,106,0,.13);--hud-glow:rgba(224,106,0,.45)}
+:root{--hud:#6f2cf3;--hud-soft:rgba(111,44,243,.12);--hud-glow:rgba(111,44,243,.42)}
 html[data-theme="dark"]{--hud:#ff9a2e;--hud-soft:rgba(255,154,46,.14);--hud-glow:rgba(255,154,46,.6)}
 
 /* 1. Phrase du jour tapée comme une réponse d'assistant */
