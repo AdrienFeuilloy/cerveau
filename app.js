@@ -548,6 +548,14 @@ function projRow(p) {
   const late = isISO(p.fm.echeance) && p.fm.echeance < today() && p.fm.statut !== 'terminé';
   return `<button class="row" data-open="${esc(p.path)}"><span class="gl" style="color:${sc(p.dom)}">${ico('proj', 18)}</span><span class="m"><span class="t" style="font-family:var(--serif);font-size:16.5px">${esc(p.title)}</span><span class="s">${nx ? '→ ' + esc(plain(nx.text)) : ts.length ? 'Tout est fait' : 'Aucune tâche'}</span><span class="bar" style="--c:${sc(p.dom)}"><i style="width:${pc}%"></i></span></span><span class="r">${isISO(p.fm.echeance) ? `<span class="${late ? 'late' : ''}">${frDate(p.fm.echeance, { day: 'numeric', month: 'short' })}</span><br>` : ''}${ts.length ? `${d}/${ts.length}` : ''}</span></button>`;
 }
+// Ligne basse du bloc d'instruments : une jauge par domaine (avancement + tâches ouvertes) et un bandeau des prochaines échéances
+function hudX(I) {
+  const g = SPHERES.map(sp => { const ts = I.tasks.filter(t => t.note.dom === sp.id), op = ts.filter(t => !t.done).length; return { id: sp.id, op, pc: ts.length ? Math.round((ts.length - op) * 100 / ts.length) : 0 }; });
+  const up = I.tasks.filter(t => !t.done && t.due).sort((a, b) => a.due.localeCompare(b.due)).slice(0, 6);
+  const txt = up.length ? up.map(t => `◆ ${dueLabel(t.due)} › ${plain(t.text)}`).join('     ') : '◆ Aucune échéance › systèmes nominaux';
+  return `<div class="hud-x">${g.map(d => `<div class="gg" style="--c:${sc(d.id)}"><svg viewBox="0 0 36 36"><circle class="tr" cx="18" cy="18" r="14"/><circle class="v" cx="18" cy="18" r="14" pathLength="100" style="stroke-dasharray:${d.pc} 100"/></svg><span><b>${String(d.op).padStart(3, '0')}</b>${esc(d.id)}</span></div>`).join('')}
+    <div class="tick"><span style="animation-duration:${Math.max(14, txt.length * .22).toFixed(1)}s">${esc(txt)}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;${esc(txt)}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></div></div>`;
+}
 // Mini bloc d'instruments en tête de chaque écran (touche HUD)
 const z3 = n => String(n).padStart(3, '0');
 const ring = () => `<svg class="mr" viewBox="0 0 20 20" aria-hidden="true"><circle class="a" cx="10" cy="10" r="8.5"/><circle class="b" cx="10" cy="10" r="5"/><circle class="d" cx="10" cy="10" r="1.6"/></svg>`;
@@ -574,7 +582,7 @@ function shell() {
         <div class="acts"><button class="ib" data-act="sync" aria-label="Synchroniser"><span data-sync class="sync"></span></button><button class="ib" data-view="boite" aria-label="Boîte">${ico('inbox')}<span class="bdg" id="bdg" hidden></span></button><button class="ib" data-act="search" aria-label="Rechercher">${ico('search')}</button><button class="ib" data-act="settings" aria-label="Réglages">${ico('set')}</button></div>
       </header>
       <div id="view"></div>
-      <p class="foot">Cerveau · v1.6.1</p>
+      <p class="foot">Cerveau · v1.7.0</p>
     </div></main>
     <nav class="tabs">
       <button data-view="today">${ico('today')}Aujourd’hui</button><button data-view="projets">${ico('proj')}Projets</button>
@@ -596,8 +604,9 @@ function render() {
   $$('[data-count]').forEach(el => el.textContent = counts[el.dataset.count] ?? '');
   $('#sideDoms').innerHTML = [['', 'Tout'], ...SPHERES.map(s => [s.id, s.id])].map(([k, l]) => `<button class="nav ${sphere === k ? 'on' : ''}" data-sph="${esc(k)}">${k ? dot(k) : '<span class="dot" style="--c:var(--ink)"></span>'}${esc(l)}</button>`).join('');
   $$('[data-view]').forEach(b => b.classList.toggle('on', b.dataset.view === view));
-  $('#view').innerHTML = { today: vToday, projets: vProjets, taches: vTaches, notes: vNotes, boite: vBoite }[view](I, late);
-  bindView(); hydrate($('#view'));
+  const html = { today: vToday, projets: vProjets, taches: vTaches, notes: vNotes, boite: vBoite }[view](I, late), vw = $('#view');
+  if (html !== lastHTML) { vw.innerHTML = html; lastHTML = html; bindView(); hydrate(vw); }
+  const clk = new Date().toLocaleTimeString('fr-FR'); $$('[data-clock]').forEach(c => c.textContent = clk);
   if (!splashing && boot && meta.last) { boot = false; bootFX($('#view')); }
   if (!splashing && view === 'today' && !typed && meta.last) typeLead();
   paint(sstate, serr);
@@ -606,7 +615,7 @@ function render() {
 // La phrase du jour s'écrit lettre par lettre, une seule fois à l'ouverture
 let typed = false;
 function typeLead() {
-  const el = $('.lead'); if (!el || matchMedia('(prefers-reduced-motion: reduce)').matches) { typed = true; el?.classList.remove('wait'); return; }
+  const el = $('.lead'); if (!el || matchMedia('(prefers-reduced-motion: reduce)').matches) { typed = typingDone = true; el?.classList.remove('wait'); return; }
   typed = true;
   const full = el.innerHTML, pr = $('.pr', el).outerHTML, txt = el.textContent.replace(/^›/, '');
   let i = 0; el.classList.add('typing'); el.classList.remove('wait'); el.innerHTML = pr + '<span class="caret"></span>';
@@ -614,17 +623,25 @@ function typeLead() {
     if (!el.isConnected) return;
     i += 1; el.innerHTML = pr + esc(txt.slice(0, i)) + '<span class="caret"></span>';
     if (i < txt.length) setTimeout(step, txt[i - 1] === ' ' ? 55 : 32 + Math.random() * 30);
-    else { el.innerHTML = full + '<span class="caret"></span>'; setTimeout(() => { el.classList.add('glx'); setTimeout(() => { el.classList.remove('typing'); }, 220); setTimeout(() => { el.classList.remove('glx'); $('.caret', el)?.classList.add('off'); }, 650); }, 1400); }
+    else { el.innerHTML = full + '<span class="caret"></span>'; setTimeout(() => { el.classList.add('glx'); setTimeout(() => { el.classList.remove('typing'); }, 220); setTimeout(() => { el.classList.remove('glx'); $('.caret', el)?.classList.add('off'); typingDone = true; }, 650); }, 1400); }
   };
   setTimeout(step, 1100); // après la séquence d’allumage du HUD
 }
 function go(v) { if (v !== view) boot = true; view = v; saveUI(); scrollTo({ top: 0 }); render(); }
+// Texte qui se « décode » : caractères aléatoires qui se figent un à un
+function decode(el, dur = 700, delay = 0) {
+  if (!el) return; const target = el.textContent, glyphs = '█▓▒░<>/\\#01ΔΣ', t0 = performance.now() + delay;
+  const f = now => { if (!el.isConnected) return; const k = (now - t0) / dur; el.textContent = [...target].map((c, i) => c === ' ' || k * target.length > i ? c : k < 0 ? ' ' : glyphs[Math.floor(Math.random() * glyphs.length)]).join(''); if (k < 1) requestAnimationFrame(f); else el.textContent = target; };
+  requestAnimationFrame(f);
+}
 // Séquence d'allumage du HUD (au lancement et à chaque changement d'écran) : coins qui se referment, compteurs qui défilent
-let boot = true, splashing = false;
+let boot = true, splashing = false, lastHTML = '', typingDone = false;
 function bootFX(root) {
   if (!root || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  const blocks = $$('.hud, .hudm', root); if (!blocks.length) return;
+  const blocks = $$('.hud, .hudm', root);
   blocks.forEach(b => { b.classList.remove('on'); void b.offsetWidth; b.classList.add('on'); });
+  $$('.lbl, .list > .row, .duo > button, .chips, .qadd, details.para, .btns', root).forEach((n, i) => { n.classList.remove('rin'); void n.offsetWidth; n.style.setProperty('--d', (250 + Math.min(i, 16) * 60) + 'ms'); n.classList.add('rin'); });
+  decode($('#ttl'), 700);
   $$('.hud b, .hudm b', root).forEach(b => {
     const m = /^(\d+)(.*)$/.exec(b.textContent.trim()); if (!m) return;
     const end = +m[1], pad = m[1].length, rest = m[2], t0 = performance.now() + 350, d = 1300;
@@ -653,9 +670,9 @@ function vToday(I, lateAll) {
   const open = I.tasks.filter(t => !t.done).length, all = I.tasks.length, seg = all ? Math.round((all - open) / all * 10) : 0, z = n => String(n).padStart(3, '0');
   const st = !ghReady() ? 'Mode local' : sstate === 'err' ? 'Liaison · erreur' : pend ? `Liaison · ${pend} en attente` : 'Liaison GitHub · OK';
   const hud = `<div class="hud" aria-hidden="true"><svg class="hud-ring" viewBox="0 0 40 40"><circle class="t" cx="20" cy="20" r="19.4"/><path class="sw" d="M20 20 L20 3 A17 17 0 0 1 34.7 11.5 Z"/><circle class="a" cx="20" cy="20" r="17.2"/><circle class="b" cx="20" cy="20" r="13"/><circle class="c" cx="20" cy="20" r="8"/><circle class="d" cx="20" cy="20" r="3"/></svg>
-    <div class="hud-d"><div class="hud-t"><i class="blip"></i><span>${st}</span><span class="clk" data-clock>${new Date().toLocaleTimeString('fr-FR')}</span></div>
-    <div class="hud-g"><span><b>${z(I.idx.length)}</b>Notes</span><span><b>${z(I.box.length)}</b>Boîte</span><span><b>${z(open)}</b>Tâches</span><span class="${I.asks.length ? 'hot' : ''}"><b>${z(I.asks.length)}</b>Assistant</span><span class="seg" title="Tâches faites">${Array.from({ length: 10 }, (_, i) => `<i class="${i < seg ? 'on' : ''}"></i>`).join('')}</span></div></div></div>`;
-  let h = domsHTML() + hud + `<p class="lead${typed ? '' : ' wait'}"><span class="pr">›</span>${lead}</p>`;
+    <div class="hud-d"><div class="hud-t"><i class="blip"></i><span>${st}</span><span class="clk" data-clock></span></div>
+    <div class="hud-g"><span><b>${z(I.idx.length)}</b>Notes</span><span><b>${z(I.box.length)}</b>Boîte</span><span><b>${z(open)}</b>Tâches</span><span class="${I.asks.length ? 'hot' : ''}"><b>${z(I.asks.length)}</b>Assistant</span><span class="seg" title="Tâches faites">${Array.from({ length: 10 }, (_, i) => `<i class="${i < seg ? 'on' : ''}"></i>`).join('')}</span></div></div>${hudX(I)}</div>`;
+  let h = domsHTML() + hud + `<p class="lead${typingDone ? '' : ' wait'}"><span class="pr">›</span>${lead}</p>`;
   if (late.length || tod.length) h += lbl('À faire aujourd’hui', 'Toutes les tâches', 'taches', late.length ? '' : '') + `<div class="list">${[...late, ...tod].slice(0, 8).map(t => taskRow(t)).join('')}</div>`;
   if (I.box.length) h += lbl(`Boîte de réception · ${I.box.length}`, 'Trier', 'boite') + `<div class="list">${I.box.slice(0, 3).map(noteRow).join('')}</div>`;
   if (I.asks.length) h += lbl(`Pour l’assistant · ${I.asks.length}`) + `<div class="list">${I.asks.map(askRow).join('')}</div>`;
@@ -1156,7 +1173,7 @@ function splash() {
   const nNotes = Object.keys(notes).filter(isNotePath).length, nBox = Object.keys(notes).filter(p => isNotePath(p) && kindOf(p) === 'boite').length;
   const log = [`Initialisation du noyau`, `Liaison GitHub ${'.'.repeat(8)} ${ghReady() ? 'OK' : 'LOCAL'}`, `${String(nNotes).padStart(3, '0')} notes indexées · ${String(nBox).padStart(3, '0')} en boîte`, `Perso · Salarié · PhantStudio : en ligne`, `Systèmes prêts. Bonjour.`];
   const el = document.createElement('div'); el.className = 'splash'; el.setAttribute('aria-hidden', 'true');
-  el.innerHTML = `<svg class="sp-logo" viewBox="0 0 200 200">
+  el.innerHTML = `<div class="sp-bg"></div><svg class="sp-logo" viewBox="0 0 200 200">
       <defs><radialGradient id="spg"><stop class="sp-stop0" offset="0"/><stop class="sp-stop1" offset=".35"/><stop class="sp-stop2" offset="1"/></radialGradient></defs>
       <circle class="sp-glow" cx="100" cy="100" r="70" fill="url(#spg)"/>
       <circle class="sp-ticks" cx="100" cy="100" r="82"/>
@@ -1188,10 +1205,24 @@ function splash() {
   let done = false;
   const finish = () => {
     if (done) return; done = true; timers.forEach(clearTimeout);
-    el.classList.add('out');
-    splashing = false; boot = true; render(); // l'allumage du HUD démarre pendant que l'écran se dévoile
-    setTimeout(() => { el.remove(); document.body.classList.remove('booting'); }, 620);
-    document.body.classList.add('reveal'); setTimeout(() => document.body.classList.remove('reveal'), 1400);
+    splashing = false; boot = true; render(); // l'écran est prêt sous le démarrage : rien de lourd pendant l'animation
+    const logo = $('.sp-logo', el);
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const a = logo.getBoundingClientRect(), ring = $('#view .hud-ring'), r = ring?.getBoundingClientRect();
+      const fly = r && r.width && r.top >= 0 && r.bottom <= innerHeight;
+      if (fly) ring.style.opacity = '0';
+      const D = 820, ease = 'cubic-bezier(.7,0,.2,1)';
+      const tf = fly ? `translate(${(r.left + r.width / 2) - (a.left + a.width / 2)}px, ${(r.top + r.height / 2) - (a.top + a.height / 2)}px) scale(${(r.width * 1.18 / a.width).toFixed(3)}) rotate(180deg)` : 'scale(1.4)';
+      logo.animate([{ transform: 'none', opacity: 1 }, { transform: tf, opacity: fly ? 1 : 0 }], { duration: D, easing: ease, fill: 'forwards' });
+      $$('.sp-name, .sp-log, .sp-bar', el).forEach((n, i) => n.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(-18px)' }], { duration: 300, delay: i * 50, easing: 'ease-in', fill: 'forwards' }));
+      $('.sp-bg', el).animate([{ opacity: 1 }, { opacity: 0 }], { duration: 560, delay: 220, easing: 'ease-out', fill: 'forwards' });
+      $('.sp-scan', el).animate([{ transform: `translateY(${innerHeight}px)`, opacity: 0 }, { opacity: 1, offset: .15 }, { transform: 'translateY(-10px)', opacity: 0 }], { duration: 700, delay: 140, easing: ease, fill: 'forwards' });
+      $('.app').animate([{ transform: 'translateY(14px) scale(.985)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 640, delay: 230, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'backwards' });
+      setTimeout(() => {
+        if (fly) { ring.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 200, fill: 'forwards' }).onfinish = () => { ring.style.opacity = ''; }; }
+        el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 200, fill: 'forwards' }).onfinish = () => { el.remove(); document.body.classList.remove('booting'); };
+      }, D - 60);
+    }));
   };
   at(2050, finish);
   el.addEventListener('pointerdown', finish);
