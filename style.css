@@ -493,3 +493,33 @@ html[data-theme="light"] .sp-glow{animation-name:spglowl}
 @keyframes ckin{from{transform:scale(0)}}
 .lbl.rin::before{animation:lblbar .5s var(--d,0ms) both}
 @keyframes lblbar{from{transform:scaleY(0)}}
+
+/* ==========================================================
+   Fils de discussion et questionnaires
+   ========================================================== */
+.doc .task .tx{cursor:pointer}
+.thb{display:inline-block;margin-left:8px;font:500 11px var(--digital);letter-spacing:.06em;color:var(--mut);opacity:.55;vertical-align:1px}
+.thb.on{color:var(--hud);opacity:1;text-shadow:0 0 6px var(--hud-glow)}
+.doc .task .tx:hover .thb{opacity:1}
+.thtask{display:flex;gap:14px;align-items:flex-start;margin:8px 0 6px}
+.thtask .ck{width:26px;height:26px;margin-top:6px}
+.thtask.done .ntitle{text-decoration:line-through;color:var(--mut)}
+.thparent{font:500 12px var(--mono);color:var(--acc);padding:4px 0 14px;border-bottom:1px solid var(--line);width:100%;text-align:left;margin-bottom:14px}
+.msgs{display:flex;flex-direction:column;gap:14px;margin-bottom:22px}
+.msg{padding:10px 14px 12px;border-radius:14px;border:1px solid var(--line);background:var(--sheet);max-width:94%}
+.msg.me{align-self:flex-end;border-bottom-right-radius:4px}
+.msg.ai{align-self:flex-start;border-color:var(--hud);border-bottom-left-radius:4px;background:linear-gradient(var(--hud-soft),var(--hud-soft)),var(--sheet);box-shadow:0 0 18px var(--hud-soft)}
+.mh{font:500 10.5px var(--digital);letter-spacing:.12em;text-transform:uppercase;color:var(--mut);margin-bottom:4px}
+.msg.ai .mh{color:var(--hud)}
+.msg .doc{font-size:15px}
+.composer{border-top:1px solid var(--line);padding-top:16px}
+/* Questionnaire */
+.qz{border:1px solid var(--line);border-left:3px solid var(--hud);border-radius:10px;padding:10px 12px;margin:10px 0;background:var(--sheet)}
+.qz.ok{border-left-color:var(--ok)}
+.qq{display:flex;gap:8px;font-weight:600;font-size:14.5px;margin-bottom:8px}
+.qn{flex:none;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font:700 11px var(--digital);background:var(--hud-soft);color:var(--hud)}
+.qz.ok .qn{background:rgba(61,125,85,.15);color:var(--ok)}
+.qz .chips{margin:0}
+.qin{width:100%;border:1px solid var(--line);background:var(--paper);border-radius:8px;padding:8px 10px;font:inherit;font-size:14.5px;outline:none;resize:vertical}
+.qin:focus{border-color:var(--hud);box-shadow:0 0 0 3px var(--hud-soft)}
+.qzend{margin:6px 0 14px;display:flex;justify-content:flex-end}

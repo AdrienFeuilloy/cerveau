@@ -58,3 +58,36 @@ Traitement : la réponse est ajoutée sous `## Réponse de l'assistant`, puis l'
 ## Polices
 
 Les touches « HUD » utilisent Share Tech Mono et Orbitron (licence SIL Open Font License, fichiers dans `fonts/`), hébergées avec l'appli : aucune requête vers un service externe.
+
+## Fils de discussion
+
+Toucher une étape (tâche) ouvre son **fil** : une discussion attachée à cette étape. Au premier message, la tâche reçoit un identifiant `🆔 abc123` (format du module Tasks d'Obsidian) et le fil devient une note du dossier `Fils/` :
+
+```yaml
+fil: abc123
+parent: "[[Note de l'étape]]"
+tache: Texte de l'étape
+```
+
+Messages : `### AAAA-MM-JJ HH:MM · moi` ou `### AAAA-MM-JJ HH:MM · assistant`, suivis du texte. La case « Demander à l'assistant » marque le fil `assistant: à traiter`.
+
+## Questionnaires
+
+Dans un fil ou une note, des questions à remplir depuis l'appli :
+
+```
+?? Question à choix unique [un: A ; B ; C]
+=>
+?? Plusieurs choix possibles [plusieurs: A ; B ; C]
+=>
+?? Oui ou non ? [oui/non]
+=>
+?? Un nombre [nombre]
+=>
+?? Une date [date]
+=>
+?? Réponse libre
+=>
+```
+
+Les réponses s'écrivent sur la ligne `=>` (retours à la ligne notés ` ⏎ `). Le bouton « Réponses prêtes » confie la note à l'assistant.

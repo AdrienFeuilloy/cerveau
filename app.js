@@ -26,7 +26,7 @@ const escRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const plural = (n, s, p = s + 's') => `${n} ${n > 1 ? p : s}`;
 const cap1 = s => s.charAt(0).toUpperCase() + s.slice(1);
 const dueLabel = iso => { const n = daysTo(iso); return n === 0 ? "aujourd'hui" : n === 1 ? 'demain' : n === -1 ? 'hier' : n < 0 ? `retard ${-n} j` : n < 7 ? new Date(iso + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long' }) : frDate(iso, { day: 'numeric', month: 'short' }); };
-const plain = s => String(s || '').replace(/!\[\[[^\]]*\]\]|!\[[^\]]*\]\([^)]*\)/g, '📷').replace(/\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|([^\]]+))?\]\]/g, (m, a, b) => b || a).replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/[📅✅]\s*\d{4}-\d{2}-\d{2}/gu, '').replace(/[*`]/g, '').replace(/\s+/g, ' ').trim();
+const plain = s => String(s || '').replace(/\s*🆔\s*[\w-]+/gu, '').replace(/!\[\[[^\]]*\]\]|!\[[^\]]*\]\([^)]*\)/g, '📷').replace(/\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|([^\]]+))?\]\]/g, (m, a, b) => b || a).replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/[📅✅]\s*\d{4}-\d{2}-\d{2}/gu, '').replace(/[*`]/g, '').replace(/\s+/g, ' ').trim();
 const cleanTitle = s => String(s || '').replace(/[\\/:*?"<>|#^[\]]/g, ' ').replace(/^[.\s]+/, '').replace(/\s+/g, ' ').trim().slice(0, 80).trim();
 function ping(el) {
   const r = el.getBoundingClientRect(), x = r.left + r.width / 2 + 'px', y = r.top + r.height / 2 + 'px';
@@ -74,6 +74,7 @@ const KINDS = [
   { id: 'ressource', dir: '3-Ressources', label: 'Ressources', short: 'Ressources', n: '3' },
   { id: 'archive', dir: '4-Archives', label: 'Archives', short: 'Archives', n: '4' },
   { id: 'journal', dir: 'Journal', label: 'Journal', short: 'Journal', n: 'J' },
+  { id: 'fil', dir: 'Fils', label: 'Fils de discussion', short: 'Fil', n: 'F', hidden: true },
 ];
 const KIND = id => KINDS.find(k => k.id === id);
 const SPHERES = [{ id: 'Perso', v: '--perso' }, { id: 'Salarié', v: '--salarie' }, { id: 'PhantStudio', v: '--phant' }];
@@ -400,8 +401,9 @@ function tasksOf(x) {
   notes[x.path].text.split('\n').forEach((l, i) => {
     const m = TASK.exec(l); if (!m) return;
     const rest = m[3], due = (/📅\s*(\d{4}-\d{2}-\d{2})/u.exec(rest) || [])[1] || '', doneAt = (/✅\s*(\d{4}-\d{2}-\d{2})/u.exec(rest) || [])[1] || '';
-    const text = rest.replace(/[📅✅⏳🛫]\s*\d{4}-\d{2}-\d{2}/gu, '').replace(/\s+/g, ' ').trim();
-    if (text) out.push({ path: x.path, line: i, raw: l, done: m[2] !== ' ', text, due, doneAt, note: x });
+    const text = rest.replace(/[📅✅⏳🛫]\s*\d{4}-\d{2}-\d{2}/gu, '').replace(/🆔\s*[\w-]+/gu, '').replace(/\s+/g, ' ').trim();
+    const id = (/🆔\s*([\w-]+)/u.exec(rest) || [])[1] || '';
+    if (text) out.push({ path: x.path, line: i, raw: l, done: m[2] !== ' ', text, due, doneAt, note: x, id });
   });
   return out;
 }
@@ -416,7 +418,7 @@ function buildIndex() {
 }
 const byTitle = (a, b) => a.title.localeCompare(b.title, 'fr');
 const findByTitle = t => { const k = norm(t), ps = Object.keys(notes).filter(p => isNotePath(p) && norm(titleOf(p)) === k); return ps.find(p => kindOf(p) !== 'archive') || ps[0]; };
-const backlinks = x => buildIndex().idx.filter(y => y.path !== x.path && new RegExp('\\[\\[' + escRe(x.title) + '(\\]\\]|\\||#)', 'i').test(notes[y.path].text));
+const backlinks = x => buildIndex().idx.filter(y => y.path !== x.path && y.kind !== 'fil' && new RegExp('\\[\\[' + escRe(x.title) + '(\\]\\]|\\||#)', 'i').test(notes[y.path].text));
 function excerpt(x) {
   const l = x.body.split('\n').map(s => s.trim()).find(s => s && !/^#/.test(s) && !TASK.test(s) && !/^[-*]\s*$/.test(s));
   return l ? plain(l.replace(/^[-*+>]\s+/, '')).slice(0, 120) : '';
@@ -456,6 +458,7 @@ function appendTo(path, { text, task, due }) {
 function inline(s) {
   let t = esc(s); const codes = [];
   t = t.replace(/`([^`]+)`/g, (m, c) => `\u0000${codes.push(c) - 1}\u0000`)
+    .replace(/\s*🆔\s*[\w-]+/gu, '')
     .replace(/!\[\[([^\]|]+)(?:\|[^\]]*)?\]\]/g, (m, a) => isImgName(unesc(a)) ? `<img class="att" data-att="${a.trim()}" alt="">` : m)
     .replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (m, alt, u) => /^https?:/.test(unesc(u)) ? `<img class="att" src="${u}" alt="${alt}">` : `<img class="att" data-att="${(() => { try { return decodeURIComponent(unesc(u)); } catch { return unesc(u); } })().split('/').pop()}" alt="${alt}">`)
     .replace(/\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|([^\]]+))?\]\]/g, (m, a, b) => `<a href="#" data-wl="${a.trim()}" class="${findByTitle(unesc(a.trim())) ? '' : 'miss'}">${b || a}</a>`)
@@ -469,14 +472,15 @@ function inline(s) {
   return t.replace(/\u0000(\d+)\u0000/g, (m, i) => `<code>${codes[i]}</code>`);
 }
 function md(src, offset = 0) {
-  const L = src.split('\n'); let h = '', para = [], list = null;
+  const L = src.split('\n'); let h = '', para = [], list = null, inQ = false;
   const fP = () => { if (para.length) { h += `<p>${para.map(inline).join('<br>')}</p>`; para = []; } };
   const fL = () => { if (list) { h += `</${list}>`; list = null; } };
   const oL = t => { if (list !== t) { fL(); h += `<${t}>`; list = t; } };
   for (let i = 0; i < L.length; i++) {
     const l = L[i]; let m;
     if (/^\s*```/.test(l)) { fP(); fL(); const c = []; i++; while (i < L.length && !/^\s*```/.test(L[i])) c.push(L[i++]); h += `<pre><code>${esc(c.join('\n'))}</code></pre>`; continue; }
-    if ((m = TASK.exec(l))) { fP(); fL(); const done = m[2] !== ' ', ind = Math.min(4, Math.floor(m[1].replace(/\t/g, '  ').length / 2)); h += `<div class="task ${done ? 'done' : ''}" style="margin-left:${ind * 22}px"><button class="ck" data-tl="${offset + i}" aria-label="${done ? 'Rouvrir' : 'Cocher'}"></button><span class="tx">${inline(m[3]) || '&nbsp;'}</span></div>`; continue; }
+    if ((m = QQ.exec(l))) { fP(); fL(); const a = ANS.exec(L[i + 1] || ''); h += qzHTML(m, a ? a[1] : null, offset + i); inQ = true; if (a) i++; if (!QQ.test(L[i + 1] || '')) { h += qzEnd(); inQ = false; } continue; }
+    if ((m = TASK.exec(l))) { fP(); fL(); const done = m[2] !== ' ', ind = Math.min(4, Math.floor(m[1].replace(/\t/g, '  ').length / 2)), id = (/🆔\s*([\w-]+)/u.exec(m[3]) || [])[1], n = id ? threadCount(id) : 0; h += `<div class="task ${done ? 'done' : ''}" style="margin-left:${ind * 22}px"><button class="ck" data-tl="${offset + i}" aria-label="${done ? 'Rouvrir' : 'Cocher'}"></button><span class="tx" data-thr="${offset + i}">${inline(m[3]) || '&nbsp;'}${m[3].trim() ? `<span class="thb${n ? ' on' : ''}">${n ? `🧵 ${n}` : '🧵'}</span>` : ''}</span></div>`; continue; }
     if ((m = /^(#{1,6})\s+(.*)$/.exec(l))) { fP(); fL(); const n = Math.min(5, m[1].length + 2); h += `<h${n}>${inline(m[2])}</h${n}>`; continue; }
     if ((m = /^\s*[-*+]\s+(.*)$/.exec(l))) { fP(); oL('ul'); h += `<li>${inline(m[1])}</li>`; continue; }
     if ((m = /^\s*\d+[.)]\s+(.*)$/.exec(l))) { fP(); oL('ol'); h += `<li>${inline(m[1])}</li>`; continue; }
@@ -541,7 +545,7 @@ const domsHTML = () => `<div class="doms" role="tablist">${[['', 'Tout'], ...SPH
 function taskRow(t, ctx = true) {
   const i = TK.push(t) - 1, late = !t.done && t.due && t.due < today();
   const bits = [t.due && !t.done ? `<span class="${late ? 'late' : ''}">${dueLabel(t.due)}</span>` : '', t.done && t.doneAt ? `fait ${frDate(t.doneAt, { day: 'numeric', month: 'short' })}` : '', ctx ? esc(t.note.title) : ''].filter(Boolean);
-  return `<div class="row wrap ${t.done ? 'done' : ''}"><button class="ck" data-tk="${i}" aria-label="${t.done ? 'Rouvrir' : 'Cocher'}"></button><span class="m clk" data-open="${esc(t.path)}" style="cursor:pointer"><span class="t">${inline(t.text)}</span>${bits.length ? `<span class="s meta">${ctx && t.note.dom ? dot(t.note.dom) + ' ' : ''}${bits.join(' · ')}</span>` : ''}</span></div>`;
+  return `<div class="row wrap ${t.done ? 'done' : ''}"><button class="ck" data-tk="${i}" aria-label="${t.done ? 'Rouvrir' : 'Cocher'}"></button><span class="m clk" data-th="${i}" style="cursor:pointer"><span class="t">${inline(t.text)}${t.id && threadCount(t.id) ? ` <span class="thb on">🧵 ${threadCount(t.id)}</span>` : ''}</span>${bits.length ? `<span class="s meta">${ctx && t.note.dom ? dot(t.note.dom) + ' ' : ''}${bits.join(' · ')}</span>` : ''}</span></div>`;
 }
 function projRow(p) {
   const ts = tasksOf(p), d = ts.filter(t => t.done).length, nx = ts.find(t => !t.done), pc = ts.length ? Math.round(d * 100 / ts.length) : 0;
@@ -582,7 +586,7 @@ function shell() {
         <div class="acts"><button class="ib" data-act="sync" aria-label="Synchroniser"><span data-sync class="sync"></span></button><button class="ib" data-view="boite" aria-label="Boîte">${ico('inbox')}<span class="bdg" id="bdg" hidden></span></button><button class="ib" data-act="search" aria-label="Rechercher">${ico('search')}</button><button class="ib" data-act="settings" aria-label="Réglages">${ico('set')}</button></div>
       </header>
       <div id="view"></div>
-      <p class="foot">Cerveau · v1.7.0</p>
+      <p class="foot">Cerveau · v1.8.0</p>
     </div></main>
     <nav class="tabs">
       <button data-view="today">${ico('today')}Aujourd’hui</button><button data-view="projets">${ico('proj')}Projets</button>
@@ -728,7 +732,7 @@ function vNotes(I) {
   let h = domsHTML() + hudm(`Index ▸ <b>${z3(L.length)}</b> notes · <b>${z3(Object.keys(meta.files).length + meta.media.length)}</b> images`, meta.last ? `Màj ${new Date(meta.last).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}` : 'Local') + `<label class="search">${ico('search')}<input id="nq" value="${esc(nq)}" placeholder="Chercher dans toutes les notes…"></label>`;
   if (nq.trim()) { const X = hits(nq); return h + `<div class="list">${X.length ? X.map(noteRow).join('') : '<p class="empty">Rien trouvé.</p>'}</div>`; }
   UI.open ||= {};
-  for (const k of [...KINDS, { id: 'autre', label: 'À la racine', n: '·' }]) {
+  for (const k of [...KINDS.filter(k => !k.hidden), { id: 'autre', label: 'À la racine', n: '·' }]) {
     const X = L.filter(x => x.kind === k.id).sort(k.id === 'journal' ? (a, b) => b.title.localeCompare(a.title) : (a, b) => (a.sub || '').localeCompare(b.sub || '', 'fr') || byTitle(a, b));
     if (!X.length && ['autre', 'journal'].includes(k.id)) continue;
     let rows = '', cur = null;
@@ -763,6 +767,7 @@ const ACTS = { settings: () => settings(), search: () => search(), journal: () =
 document.addEventListener('click', e => {
   const wl = e.target.closest('[data-wl]'); if (wl) { e.preventDefault(); return openWiki(wl.dataset.wl); }
   if (e.target.closest('a[target]')) return;
+  const th = e.target.closest('[data-th]'); if (th) { const t = TK[+th.dataset.th]; if (t) openThread(t.path, t.line, t.raw); return; }
   const tk = e.target.closest('[data-tk]'); if (tk) { const t = TK[+tk.dataset.tk]; if (t) { if (toggleLine(t.path, t.line, t.raw)) ping(tk); render(); } return; }
   const sp = e.target.closest('[data-sph]'); if (sp) { sphere = sp.dataset.sph; saveUI(); return render(); }
   const vw = e.target.closest('[data-view]'); if (vw) return go(vw.dataset.view);
@@ -918,6 +923,7 @@ function classify(path, chain = false) {
 /* ---------- Lire une note ---------- */
 function openNote(path) {
   if (!notes[path]) return toast('Note introuvable');
+  if (kindOf(path) === 'fil') { const f = threadParent(path); if (f) return openThread(f.path, f.line, f.raw); }
   const x = info(path), offset = notes[path].text.split('\n').length - x.body.split('\n').length;
   const ts = tasksOf(x), back = backlinks(x), isProj = x.kind === 'projet';
   const metaBits = [`<span>${esc(KIND(x.kind)?.label || 'Note')}${x.sub ? ' / ' + esc(x.sub) : ''}</span>`,
@@ -940,7 +946,10 @@ function openNote(path) {
       <button class="btn bad" id="nDel">Supprimer</button></div>
     <p class="path">${esc(path)}</p>`, { page: true, actions: `<button class="ib" id="nEd" aria-label="Modifier">${ico('edit')}</button>` });
   scanDoc($('#nMd', pan));
+  const redraw = () => { const y = info(path); $('#nMd', pan).innerHTML = md(y.body, notes[path].text.split('\n').length - y.body.split('\n').length); hydrate($('#nMd', pan)); render(); };
+  bindQz($('#nMd', pan), path, redraw);
   $('#nMd', pan).addEventListener('click', e => {
+    const tx = e.target.closest('[data-thr]'); if (tx && !e.target.closest('a')) { const i = +tx.dataset.thr; return openThread(path, i, notes[path].text.split('\n')[i]); }
     const b = e.target.closest('[data-tl]'); if (!b) return;
     const i = +b.dataset.tl;
     if (toggleLine(path, i, notes[path].text.split('\n')[i])) ping(b);
@@ -955,6 +964,103 @@ function openNote(path) {
   on('#nArc', () => { const np = moveNote(path, uniquePath(dirOf('archive'), x.title)); toast('Archivé'); render(); openNote(np); });
   on('#nUn', () => { const k = x.fm.type === 'projet' ? 'projet' : x.fm.type === 'domaine' ? 'domaine' : 'ressource'; if (k === 'projet') setFm(path, { statut: 'actif', fini: undefined }); const np = moveNote(path, uniquePath(dirOf(k), x.title)); toast('Sorti des archives'); render(); openNote(np); });
   on('#nDel', () => { if (!confirm(`Supprimer « ${x.title} » ? (l'historique GitHub en garde une copie)`)) return; deleteNote(path); closeLayer(() => render()); render(); toast('Supprimée'); });
+}
+
+/* ==========================================================
+   Fils de discussion : chaque étape (tâche) peut ouvrir un fil.
+   La tâche reçoit un identifiant « 🆔 abc123 » (format Tasks d'Obsidian) ;
+   le fil est une note du dossier Fils/ : en-tête fil, parent, tache ;
+   messages « ### AAAA-MM-JJ HH:MM · moi » ou « · assistant ».
+   ========================================================== */
+const MSG = /^###\s+(\d{4}-\d{2}-\d{2}(?: \d{2}:\d{2})?)\s*·\s*(moi|assistant)\s*$/i;
+const threadPath = id => Object.keys(notes).find(p => kindOf(p) === 'fil' && parse(notes[p].text).fm.fil === id);
+const threadCount = id => { const p = threadPath(id); return p ? notes[p].text.split('\n').filter(l => MSG.test(l)).length : 0; };
+function threadParent(tp) {
+  const { fm } = parse(notes[tp].text), pt = /\[\[([^\]|#]+)/.exec(fm.parent || '');
+  const pp = pt && findByTitle(pt[1]); if (!pp || !notes[pp]) return null;
+  const L = notes[pp].text.split('\n'), i = L.findIndex(l => TASK.test(l) && new RegExp('🆔\\s*' + escRe(fm.fil) + '\\b', 'u').test(l));
+  return i < 0 ? null : { path: pp, line: i, raw: L[i] };
+}
+const stampNow = () => `${today()} ${new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
+const stampLabel = st => { const [d, h] = st.split(' '); return `${d === today() ? "Aujourd'hui" : frDate(d, { day: 'numeric', month: 'short' })}${h ? ' · ' + h : ''}`; };
+function openThread(path, line, raw) {
+  if (!notes[path]) return;
+  const L0 = notes[path].text.split('\n'); let i = L0[line] === raw ? line : L0.indexOf(raw); if (i < 0) i = line;
+  const m = TASK.exec(L0[i] || ''); if (!m) return toast('Étape introuvable');
+  const id = (/🆔\s*([\w-]+)/u.exec(m[3]) || [])[1], tp = id && threadPath(id);
+  const text = m[3].replace(/[📅✅⏳🛫]\s*\d{4}-\d{2}-\d{2}/gu, '').replace(/🆔\s*[\w-]+/gu, '').replace(/\s+/g, ' ').trim(), done = m[2] !== ' ';
+  const due = (/📅\s*(\d{4}-\d{2}-\d{2})/u.exec(m[3]) || [])[1];
+  const parent = info(path);
+  let msgs = [], intro = '', tx = null;
+  if (tp) {
+    tx = info(tp); const BL = tx.body.split('\n'), off = notes[tp].text.split('\n').length - BL.length; let cur = null;
+    BL.forEach((l, k) => { const mm = MSG.exec(l); if (mm) { cur = { st: mm[1], who: mm[2].toLowerCase(), lines: [], at: off + k + 1 }; msgs.push(cur); } else if (cur) cur.lines.push(l); else intro += l + '\n'; });
+  }
+  const msgHTML = mm => `<div class="msg ${mm.who === 'assistant' ? 'ai' : 'me'}"><div class="mh">${mm.who === 'assistant' ? '◆ Assistant' : 'Moi'} · ${esc(stampLabel(mm.st))}</div><div class="doc">${md(mm.lines.join('\n').trim() ? mm.lines.join('\n').replace(/\n+$/, '') : '', mm.at) || '<p class="empty">…</p>'}</div></div>`;
+  const pan = layer('', `
+    ${hudm(`Fil ▸ ${esc(parent.title)}`, tp ? `<b>${z3(msgs.length)}</b> message${msgs.length > 1 ? 's' : ''}` : 'Nouveau fil')}
+    <div class="thtask ${done ? 'done' : ''}"><button class="ck" id="thCk" aria-label="${done ? 'Rouvrir' : 'Cocher'}"></button><div><div class="ntitle" style="font-size:25px;margin:0">${inline(text)}</div>${due ? `<span class="due ${!done && due < today() ? 'late' : ''}">→ ${dueLabel(due)}</span>` : ''}</div></div>
+    <button class="thparent" data-open="${esc(path)}">↩ ${esc(parent.title)}</button>
+    ${tx?.ask ? `<div class="askbox"><span>◆ En attente de l’assistant</span>${esc(tx.fm.consigne || 'Réponse au dernier message')}</div>` : ''}
+    <div class="msgs" id="thM">${intro.trim() ? `<div class="doc">${md(intro.trim())}</div>` : ''}${msgs.map(msgHTML).join('') || '<p class="empty">Aucun message. Lance le fil : une idée, une question, une piste…</p>'}</div>
+    <div class="composer"><div class="capw"><textarea class="big" id="thT" rows="3" placeholder="Écris dans le fil…" style="min-height:90px;font-size:17px"></textarea><span class="tag"><i class="wv"><b></b><b></b><b></b><b></b><b></b><b></b><b></b></i>Écoute</span></div>
+      <label class="askchk"><input type="checkbox" id="thA"> ◆ Demander à l’assistant <small>réponse ou questionnaire dans le fil</small></label>
+      <div class="btns"><button class="btn" id="thOk">Envoyer</button></div></div>`, { page: true });
+  hydrate($('#thM', pan));
+  if (tp) bindQz($('#thM', pan), tp, () => openThread(path, i, notes[path].text.split('\n')[i]));
+  $('#thCk', pan).onclick = e => { const L = notes[path].text.split('\n'); if (toggleLine(path, i, L[i])) ping(e.currentTarget); render(); openThread(path, i, notes[path].text.split('\n')[i]); };
+  $('#thT', pan).onkeydown = e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) $('#thOk', pan).click(); };
+  $('#thOk', pan).onclick = () => {
+    const msg = $('#thT', pan).value.trim(), ask = $('#thA', pan).checked;
+    if (!msg && !ask) return toast('Écris quelque chose');
+    let fp = tp, L = notes[path].text.split('\n');
+    if (!fp) {
+      const nid = Math.random().toString(36).slice(2, 8);
+      L[i] = L[i].replace(/\s*$/, '') + ' 🆔 ' + nid; saveNote(path, L.join('\n'));
+      fp = createNote(uniquePath(R() + 'Fils', text.slice(0, 70)), build({ fil: nid, parent: `[[${parent.title}]]`, tache: text, domaine: parent.dom || undefined, cree: today() }, ''));
+    }
+    const cur = notes[fp].text.replace(/\s*$/, '\n');
+    saveNote(fp, msg ? `${cur}\n### ${stampNow()} · moi\n${msg}\n` : cur);
+    if (ask) setFm(fp, { assistant: 'à traiter', consigne: msg ? undefined : 'Réponds dans le fil', demande: today(), traite: undefined });
+    vibrate(); toast(ask ? 'Envoyé à l’assistant ◆' : 'Ajouté au fil'); render();
+    const L2 = notes[path].text.split('\n'), j = L2.findIndex(l => l.includes(text) && TASK.test(l));
+    openThread(path, j < 0 ? i : j, L2[j < 0 ? i : j]);
+    requestAnimationFrame(() => { const pb = $('.ov .pb'); if (pb) pb.scrollTop = pb.scrollHeight; });
+  };
+}
+
+/* ---------- Questionnaires : l'assistant les écrit dans un fil ou une note, tu réponds depuis l'appli ----------
+   ?? Question [un: A ; B ; C]   (un choix)      ?? Question [plusieurs: A ; B]   (plusieurs choix)
+   ?? Question [oui/non]   ?? Question [nombre]   ?? Question [date]   ?? Question   (texte libre)
+   => réponse   (ligne juste en dessous ; vide tant que pas de réponse) */
+const QQ = /^\?\?\s+(.+?)\s*(?:\[(un|plusieurs|oui\/non|nombre|date)(?::\s*([^\]]*))?\])?\s*$/i;
+const ANS = /^=>\s?(.*)$/;
+function qzHTML(m, ans, line) {
+  const type = (m[2] || 'texte').toLowerCase(), opts = (m[3] || '').split(';').map(x => x.trim()).filter(Boolean), a = (ans || '').trim();
+  let f;
+  if (type === 'un' || type === 'oui/non') f = `<div class="chips">${(type === 'oui/non' ? ['Oui', 'Non'] : opts).map(v => `<button type="button" class="chip ${a === v ? 'on' : ''}" data-qv="${esc(v)}">${esc(v)}</button>`).join('')}</div>`;
+  else if (type === 'plusieurs') { const sel = a.split(/\s*,\s*/); f = `<div class="chips">${opts.map(v => `<button type="button" class="chip ${sel.includes(v) ? 'on' : ''}" data-qm="${esc(v)}">${esc(v)}</button>`).join('')}</div>`; }
+  else if (type === 'nombre') f = `<input class="qin" type="number" inputmode="decimal" value="${esc(a)}">`;
+  else if (type === 'date') f = `<input class="qin" type="date" value="${esc(a)}">`;
+  else f = `<textarea class="qin" rows="2" placeholder="Ta réponse…">${esc(a.replace(/ ⏎ /g, '\n'))}</textarea>`;
+  return `<div class="qz ${a ? 'ok' : ''}" data-ql="${line}"><div class="qq"><span class="qn">${a ? '✓' : '?'}</span>${inline(m[1])}</div>${f}</div>`;
+}
+const qzEnd = () => `<div class="qzend"><button type="button" class="btn sm line askbtn" data-qsend>◆ Réponses prêtes : confier à l’assistant</button></div>`;
+function bindQz(root, path, redraw) {
+  if (!root) return;
+  const setAns = (line, v) => {
+    const L = notes[path].text.split('\n'); if (!QQ.test(L[line] || '')) return;
+    v = String(v).replace(/\r?\n/g, ' ⏎ ').trim();
+    if (ANS.test(L[line + 1] || '')) { if (L[line + 1] === `=> ${v}`) return; L[line + 1] = `=> ${v}`; saveNote(path, L.join('\n')); }
+    else { L.splice(line + 1, 0, `=> ${v}`); saveNote(path, L.join('\n')); redraw(); }
+  };
+  root.addEventListener('click', e => {
+    const q = e.target.closest('[data-ql]'), line = q && +q.dataset.ql;
+    const one = e.target.closest('[data-qv]'); if (one) { const on = !one.classList.contains('on'); setAns(line, on ? one.dataset.qv : ''); $$('[data-qv]', q).forEach(b => b.classList.toggle('on', b === one && on)); q.classList.toggle('ok', on); vibrate(); return; }
+    const mul = e.target.closest('[data-qm]'); if (mul) { mul.classList.toggle('on'); const v = $$('[data-qm].on', q).map(b => b.dataset.qm).join(', '); setAns(line, v); q.classList.toggle('ok', !!v); return; }
+    if (e.target.closest('[data-qsend]')) { setFm(path, { assistant: 'à traiter', consigne: 'Questionnaire rempli : analyse mes réponses et continue', demande: today(), traite: undefined }); toast('Réponses confiées à l’assistant ◆'); vibrate(); render(); redraw(); }
+  });
+  root.addEventListener('change', e => { const inp = e.target.closest('.qin'); if (!inp) return; const q = inp.closest('[data-ql]'); setAns(+q.dataset.ql, inp.value); q.classList.toggle('ok', !!inp.value.trim()); });
 }
 
 /* ---------- Confier une note à l'assistant ----------
