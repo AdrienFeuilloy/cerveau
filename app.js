@@ -574,7 +574,7 @@ function shell() {
         <div class="acts"><button class="ib" data-act="sync" aria-label="Synchroniser"><span data-sync class="sync"></span></button><button class="ib" data-view="boite" aria-label="Boîte">${ico('inbox')}<span class="bdg" id="bdg" hidden></span></button><button class="ib" data-act="search" aria-label="Rechercher">${ico('search')}</button><button class="ib" data-act="settings" aria-label="Réglages">${ico('set')}</button></div>
       </header>
       <div id="view"></div>
-      <p class="foot">Cerveau · v1.5.0</p>
+      <p class="foot">Cerveau · v1.6.0</p>
     </div></main>
     <nav class="tabs">
       <button data-view="today">${ico('today')}Aujourd’hui</button><button data-view="projets">${ico('proj')}Projets</button>
@@ -598,18 +598,18 @@ function render() {
   $$('[data-view]').forEach(b => b.classList.toggle('on', b.dataset.view === view));
   $('#view').innerHTML = { today: vToday, projets: vProjets, taches: vTaches, notes: vNotes, boite: vBoite }[view](I, late);
   bindView(); hydrate($('#view'));
-  if (boot && meta.last) { boot = false; bootFX($('#view')); }
-  if (view === 'today' && !typed && meta.last) typeLead();
+  if (!splashing && boot && meta.last) { boot = false; bootFX($('#view')); }
+  if (!splashing && view === 'today' && !typed && meta.last) typeLead();
   paint(sstate, serr);
   document.title = (I.box.length ? `(${I.box.length}) ` : '') + 'Cerveau';
 }
 // La phrase du jour s'écrit lettre par lettre, une seule fois à l'ouverture
 let typed = false;
 function typeLead() {
-  const el = $('.lead'); if (!el || matchMedia('(prefers-reduced-motion: reduce)').matches) { typed = true; return; }
+  const el = $('.lead'); if (!el || matchMedia('(prefers-reduced-motion: reduce)').matches) { typed = true; el?.classList.remove('wait'); return; }
   typed = true;
   const full = el.innerHTML, pr = $('.pr', el).outerHTML, txt = el.textContent.replace(/^›/, '');
-  let i = 0; el.classList.add('typing'); el.innerHTML = pr + '<span class="caret"></span>';
+  let i = 0; el.classList.add('typing'); el.classList.remove('wait'); el.innerHTML = pr + '<span class="caret"></span>';
   const step = () => {
     if (!el.isConnected) return;
     i += 1; el.innerHTML = pr + esc(txt.slice(0, i)) + '<span class="caret"></span>';
@@ -620,7 +620,7 @@ function typeLead() {
 }
 function go(v) { if (v !== view) boot = true; view = v; saveUI(); scrollTo({ top: 0 }); render(); }
 // Séquence d'allumage du HUD (au lancement et à chaque changement d'écran) : coins qui se referment, compteurs qui défilent
-let boot = true;
+let boot = true, splashing = false;
 function bootFX(root) {
   if (!root || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const blocks = $$('.hud, .hudm', root); if (!blocks.length) return;
@@ -655,7 +655,7 @@ function vToday(I, lateAll) {
   const hud = `<div class="hud" aria-hidden="true"><svg class="hud-ring" viewBox="0 0 40 40"><circle class="t" cx="20" cy="20" r="19.4"/><path class="sw" d="M20 20 L20 3 A17 17 0 0 1 34.7 11.5 Z"/><circle class="a" cx="20" cy="20" r="17.2"/><circle class="b" cx="20" cy="20" r="13"/><circle class="c" cx="20" cy="20" r="8"/><circle class="d" cx="20" cy="20" r="3"/></svg>
     <div class="hud-d"><div class="hud-t"><i class="blip"></i><span>${st}</span><span class="clk" data-clock>${new Date().toLocaleTimeString('fr-FR')}</span></div>
     <div class="hud-g"><span><b>${z(I.idx.length)}</b>Notes</span><span><b>${z(I.box.length)}</b>Boîte</span><span><b>${z(open)}</b>Tâches</span><span class="${I.asks.length ? 'hot' : ''}"><b>${z(I.asks.length)}</b>Assistant</span><span class="seg" title="Tâches faites">${Array.from({ length: 10 }, (_, i) => `<i class="${i < seg ? 'on' : ''}"></i>`).join('')}</span></div></div></div>`;
-  let h = domsHTML() + hud + `<p class="lead"><span class="pr">›</span>${lead}</p>`;
+  let h = domsHTML() + hud + `<p class="lead${typed ? '' : ' wait'}"><span class="pr">›</span>${lead}</p>`;
   if (late.length || tod.length) h += lbl('À faire aujourd’hui', 'Toutes les tâches', 'taches', late.length ? '' : '') + `<div class="list">${[...late, ...tod].slice(0, 8).map(t => taskRow(t)).join('')}</div>`;
   if (I.box.length) h += lbl(`Boîte de réception · ${I.box.length}`, 'Trier', 'boite') + `<div class="list">${I.box.slice(0, 3).map(noteRow).join('')}</div>`;
   if (I.asks.length) h += lbl(`Pour l’assistant · ${I.asks.length}`) + `<div class="list">${I.asks.map(askRow).join('')}</div>`;
@@ -1144,7 +1144,62 @@ function settings() {
 }
 
 /* ---------- Démarrage ---------- */
+/* ==========================================================
+   Démarrage façon assistant : le logo s'assemble, le système « s'initialise », puis l'écran se dévoile
+   (2,6 s au plus ; un toucher passe directement à l'appli)
+   ========================================================== */
+function splash() {
+  splashing = true;
+  const P = (a, r) => [100 + r * Math.cos(a * Math.PI / 180), 100 + r * Math.sin(a * Math.PI / 180)].map(n => n.toFixed(2)).join(' ');
+  const arc = (a, r, w = 38) => `M${P(a - w, r)} A${r} ${r} 0 0 1 ${P(a + w, r)}`;
+  const nodes = [-120, 0, 120].map(a => P(a, 58).split(' '));
+  const nNotes = Object.keys(notes).filter(isNotePath).length, nBox = Object.keys(notes).filter(p => isNotePath(p) && kindOf(p) === 'boite').length;
+  const log = [`Initialisation du noyau`, `Liaison GitHub ${'.'.repeat(8)} ${ghReady() ? 'OK' : 'LOCAL'}`, `${String(nNotes).padStart(3, '0')} notes indexées · ${String(nBox).padStart(3, '0')} en boîte`, `Perso · Salarié · PhantStudio : en ligne`, `Systèmes prêts. Bonjour.`];
+  const el = document.createElement('div'); el.className = 'splash'; el.setAttribute('aria-hidden', 'true');
+  el.innerHTML = `<svg class="sp-logo" viewBox="0 0 200 200">
+      <defs><radialGradient id="spg"><stop offset="0" stop-color="#ffd6a0"/><stop offset=".35" stop-color="#ff9a2e" stop-opacity=".55"/><stop offset="1" stop-color="#ff9a2e" stop-opacity="0"/></radialGradient></defs>
+      <circle class="sp-glow" cx="100" cy="100" r="70" fill="url(#spg)"/>
+      <circle class="sp-ticks" cx="100" cy="100" r="82"/>
+      <circle class="sp-thin" cx="100" cy="100" r="70" pathLength="100"/>
+      ${[-60, 60, 180].map((a, i) => `<path class="sp-arc" style="--i:${i}" d="${arc(a, 58)}" pathLength="100"/>`).join('')}
+      <g class="sp-radar"><path d="M100 100 L${P(-90, 48)} A48 48 0 0 1 ${P(-30, 48)} Z"/></g>
+      <circle class="sp-dash" cx="100" cy="100" r="48"/>
+      <polygon class="sp-tri" points="${nodes.map(n => n.join(',')).join(' ')}" pathLength="100"/>
+      ${nodes.map(([x, y], i) => `<g class="sp-node" style="--i:${i};transform-origin:${x}px ${y}px"><circle cx="${x}" cy="${y}" r="13" fill="#0b0c0e"/><circle cx="${x}" cy="${y}" r="9.5" fill="${['#79b88b', '#7fa3e0', '#e8865c'][i]}"/></g>`).join('')}
+      <circle class="sp-core" cx="100" cy="100" r="9"/>
+    </svg>
+    <div class="sp-name" data-txt="CERVEAU">&nbsp;</div>
+    <div class="sp-log"></div>
+    <div class="sp-bar">${'<i></i>'.repeat(24)}</div>
+    <div class="sp-scan"></div>`;
+  document.body.appendChild(el);
+  document.body.classList.add('booting');
+  const timers = [], at = (ms, f) => timers.push(setTimeout(f, ms));
+  // Le nom se « décode »
+  const nm = $('.sp-name', el), target = nm.dataset.txt, glyphs = '█▓▒░<>/\\#01ΔΣ';
+  const t0 = performance.now() + 450;
+  const dec = now => { if (!el.isConnected) return; const k = (now - t0) / 750; nm.textContent = [...target].map((c, i) => k * target.length > i + 1 ? c : k < 0 ? ' ' : glyphs[Math.floor(Math.random() * glyphs.length)]).join(''); if (k < target.length / target.length + .3) requestAnimationFrame(dec); else nm.textContent = target; };
+  requestAnimationFrame(dec);
+  // Journal de démarrage tapé ligne à ligne
+  const lg = $('.sp-log', el);
+  log.forEach((l, i) => at(650 + i * 290, () => { const d = document.createElement('div'); d.textContent = '› '; lg.appendChild(d); let j = 0; const ty = () => { d.textContent = '› ' + l.slice(0, j); if (j < l.length) { j = Math.min(l.length, j + 2); setTimeout(ty, 11); } }; ty(); }));
+  // Barre segmentée
+  const segs = $$('.sp-bar i', el); segs.forEach((g, i) => at(600 + i * 58, () => g.classList.add('on')));
+  let done = false;
+  const finish = () => {
+    if (done) return; done = true; timers.forEach(clearTimeout);
+    el.classList.add('out');
+    splashing = false; boot = true; render(); // l'allumage du HUD démarre pendant que l'écran se dévoile
+    setTimeout(() => { el.remove(); document.body.classList.remove('booting'); }, 620);
+    document.body.classList.add('reveal'); setTimeout(() => document.body.classList.remove('reveal'), 1400);
+  };
+  at(2050, finish);
+  el.addEventListener('pointerdown', finish);
+}
+
 shell();
+const coldSplash = !['share', 'capture', 'text', 'url', 'title'].some(k => new URLSearchParams(location.search).has(k)) && !matchMedia('(prefers-reduced-motion: reduce)').matches && !sessionStorage.getItem('sc.splash');
+if (coldSplash) { try { sessionStorage.setItem('sc.splash', '1'); } catch { } splash(); }
 render();
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) navigator.serviceWorker.register('./sw.js').then(r => r.update()).catch(() => { });
 // Partage depuis une autre appli (Android : « Partager → Cerveau ») ou raccourci « Capturer »
