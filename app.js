@@ -571,7 +571,7 @@ function shell() {
         <div class="acts"><button class="ib" data-act="sync" aria-label="Synchroniser"><span data-sync class="sync"></span></button><button class="ib" data-view="boite" aria-label="Boîte">${ico('inbox')}<span class="bdg" id="bdg" hidden></span></button><button class="ib" data-act="search" aria-label="Rechercher">${ico('search')}</button><button class="ib" data-act="settings" aria-label="Réglages">${ico('set')}</button></div>
       </header>
       <div id="view"></div>
-      <p class="foot">Cerveau · v1.4.0</p>
+      <p class="foot">Cerveau · v1.4.1</p>
     </div></main>
     <nav class="tabs">
       <button data-view="today">${ico('today')}Aujourd’hui</button><button data-view="projets">${ico('proj')}Projets</button>
@@ -944,13 +944,16 @@ function scanDoc(el) {
   if (!blocks.length) return;
   el.classList.add('digi');
   const line = document.createElement('div'); line.className = 'scanl'; el.appendChild(line);
-  const t0 = performance.now() + 220, dur = Math.min(1900, 650 + el.scrollHeight * 1.1);
+  // La ligne avance à vitesse constante dans la mise en page réelle : chaque bloc change de police
+  // à l'instant où elle le touche, et ce qui est en dessous se recale avant d'être atteint (pas de décalage).
+  const v = Math.max(.55, el.offsetHeight / 1200); let y = 0, last = performance.now() + 220;
   const tick = now => {
     if (!el.isConnected) return;
-    const k = Math.max(0, Math.min(1, (now - t0) / dur)), e = k < .5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2, y = e * el.offsetHeight;
-    line.style.top = y + 'px';
-    for (const b of blocks) if (!b.classList.contains('std') && b.offsetTop + 4 < y) b.classList.add('std');
-    if (k < 1) requestAnimationFrame(tick);
+    if (now > last) { y += (now - last) * v; last = now; }
+    for (const b of blocks) if (!b.classList.contains('std') && b.offsetTop <= y) b.classList.add('std');
+    const end = el.offsetHeight;
+    line.style.top = Math.min(y, end) + 'px';
+    if (y < end) requestAnimationFrame(tick);
     else { el.classList.remove('digi'); blocks.forEach(b => b.classList.remove('std')); line.animate([{ opacity: 1 }, { opacity: 0 }], 300).onfinish = () => line.remove(); }
   };
   requestAnimationFrame(tick);

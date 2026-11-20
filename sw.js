@@ -1,7 +1,7 @@
 // Service worker de Cerveau : l'appli s'ouvre même hors ligne.
 // Réseau d'abord (les mises à jour arrivent tout de suite), le cache sert de secours.
 // Les appels à l'API GitHub ne passent jamais par ici.
-const CACHE = "cerveau-v1.4.0";
+const CACHE = "cerveau-v1.4.1";
 const SHELL = ["./", "./index.html", "./style.css", "./app.js", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./apple-touch-icon.png", "./fonts/share-tech-mono.woff", "./fonts/orbitron.woff"];
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => Promise.all(SHELL.map(u => c.add(u).catch(() => {})))).then(() => self.skipWaiting()));
