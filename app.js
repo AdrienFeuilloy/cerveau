@@ -28,7 +28,10 @@ const cap1 = s => s.charAt(0).toUpperCase() + s.slice(1);
 const dueLabel = iso => { const n = daysTo(iso); return n === 0 ? "aujourd'hui" : n === 1 ? 'demain' : n === -1 ? 'hier' : n < 0 ? `retard ${-n} j` : n < 7 ? new Date(iso + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long' }) : frDate(iso, { day: 'numeric', month: 'short' }); };
 const plain = s => String(s || '').replace(/!\[\[[^\]]*\]\]|!\[[^\]]*\]\([^)]*\)/g, '📷').replace(/\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|([^\]]+))?\]\]/g, (m, a, b) => b || a).replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/[📅✅]\s*\d{4}-\d{2}-\d{2}/gu, '').replace(/[*`]/g, '').replace(/\s+/g, ' ').trim();
 const cleanTitle = s => String(s || '').replace(/[\\/:*?"<>|#^[\]]/g, ' ').replace(/^[.\s]+/, '').replace(/\s+/g, ' ').trim().slice(0, 80).trim();
-function ping(el) { const r = el.getBoundingClientRect(); for (const c of ['ping x', 'ping', 'ping']) { const d = document.createElement('div'); d.className = c; d.style.left = r.left + r.width / 2 + 'px'; d.style.top = r.top + r.height / 2 + 'px'; document.body.appendChild(d); setTimeout(() => d.remove(), 900); } }
+function ping(el) {
+  const r = el.getBoundingClientRect(), x = r.left + r.width / 2 + 'px', y = r.top + r.height / 2 + 'px';
+  for (const c of ['ping x', 'ping cross', 'ping', 'ping', 'ping', 'pingt']) { const d = document.createElement('div'); d.className = c; d.style.left = x; d.style.top = y; if (c === 'pingt') d.textContent = 'Validé'; document.body.appendChild(d); setTimeout(() => d.remove(), 1700); }
+}
 setInterval(() => { const c = document.querySelector('[data-clock]'); if (c) c.textContent = new Date().toLocaleTimeString('fr-FR'); }, 1000);
 const vibrate = () => { try { navigator.vibrate?.(8); } catch { } };
 
@@ -571,7 +574,7 @@ function shell() {
         <div class="acts"><button class="ib" data-act="sync" aria-label="Synchroniser"><span data-sync class="sync"></span></button><button class="ib" data-view="boite" aria-label="Boîte">${ico('inbox')}<span class="bdg" id="bdg" hidden></span></button><button class="ib" data-act="search" aria-label="Rechercher">${ico('search')}</button><button class="ib" data-act="settings" aria-label="Réglages">${ico('set')}</button></div>
       </header>
       <div id="view"></div>
-      <p class="foot">Cerveau · v1.4.1</p>
+      <p class="foot">Cerveau · v1.5.0</p>
     </div></main>
     <nav class="tabs">
       <button data-view="today">${ico('today')}Aujourd’hui</button><button data-view="projets">${ico('proj')}Projets</button>
@@ -595,6 +598,7 @@ function render() {
   $$('[data-view]').forEach(b => b.classList.toggle('on', b.dataset.view === view));
   $('#view').innerHTML = { today: vToday, projets: vProjets, taches: vTaches, notes: vNotes, boite: vBoite }[view](I, late);
   bindView(); hydrate($('#view'));
+  if (boot && meta.last) { boot = false; bootFX($('#view')); }
   if (view === 'today' && !typed && meta.last) typeLead();
   paint(sstate, serr);
   document.title = (I.box.length ? `(${I.box.length}) ` : '') + 'Cerveau';
@@ -608,13 +612,26 @@ function typeLead() {
   let i = 0; el.classList.add('typing'); el.innerHTML = pr + '<span class="caret"></span>';
   const step = () => {
     if (!el.isConnected) return;
-    i += 2; el.innerHTML = pr + esc(txt.slice(0, i)) + '<span class="caret"></span>';
-    if (i < txt.length) setTimeout(step, 16);
-    else { el.innerHTML = full + '<span class="caret"></span>'; setTimeout(() => { el.classList.remove('typing'); $('.caret', el)?.classList.add('off'); }, 900); }
+    i += 1; el.innerHTML = pr + esc(txt.slice(0, i)) + '<span class="caret"></span>';
+    if (i < txt.length) setTimeout(step, txt[i - 1] === ' ' ? 55 : 32 + Math.random() * 30);
+    else { el.innerHTML = full + '<span class="caret"></span>'; setTimeout(() => { el.classList.add('glx'); setTimeout(() => { el.classList.remove('typing'); }, 220); setTimeout(() => { el.classList.remove('glx'); $('.caret', el)?.classList.add('off'); }, 650); }, 1400); }
   };
-  setTimeout(step, 250);
+  setTimeout(step, 1100); // après la séquence d’allumage du HUD
 }
-function go(v) { view = v; saveUI(); scrollTo({ top: 0 }); render(); }
+function go(v) { if (v !== view) boot = true; view = v; saveUI(); scrollTo({ top: 0 }); render(); }
+// Séquence d'allumage du HUD (au lancement et à chaque changement d'écran) : coins qui se referment, compteurs qui défilent
+let boot = true;
+function bootFX(root) {
+  if (!root || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const blocks = $$('.hud, .hudm', root); if (!blocks.length) return;
+  blocks.forEach(b => { b.classList.remove('on'); void b.offsetWidth; b.classList.add('on'); });
+  $$('.hud b, .hudm b', root).forEach(b => {
+    const m = /^(\d+)(.*)$/.exec(b.textContent.trim()); if (!m) return;
+    const end = +m[1], pad = m[1].length, rest = m[2], t0 = performance.now() + 350, d = 1300;
+    const f = now => { if (!b.isConnected) return; const k = Math.max(0, Math.min(1, (now - t0) / d)); const v = k < 1 ? Math.floor(end * (1 - (1 - k) ** 3)) : end; b.textContent = String(v).padStart(pad, '0') + rest; if (k < 1) requestAnimationFrame(f); };
+    b.textContent = '0'.repeat(pad) + rest; requestAnimationFrame(f);
+  });
+}
 
 /* ---------- Aujourd'hui ---------- */
 function vToday(I, lateAll) {
@@ -635,7 +652,7 @@ function vToday(I, lateAll) {
   const pend = Object.values(notes).filter(n => n.dirty).length;
   const open = I.tasks.filter(t => !t.done).length, all = I.tasks.length, seg = all ? Math.round((all - open) / all * 10) : 0, z = n => String(n).padStart(3, '0');
   const st = !ghReady() ? 'Mode local' : sstate === 'err' ? 'Liaison · erreur' : pend ? `Liaison · ${pend} en attente` : 'Liaison GitHub · OK';
-  const hud = `<div class="hud" aria-hidden="true"><svg class="hud-ring" viewBox="0 0 40 40"><circle class="a" cx="20" cy="20" r="18"/><circle class="b" cx="20" cy="20" r="13"/><circle class="c" cx="20" cy="20" r="8"/><circle class="d" cx="20" cy="20" r="3"/></svg>
+  const hud = `<div class="hud" aria-hidden="true"><svg class="hud-ring" viewBox="0 0 40 40"><circle class="t" cx="20" cy="20" r="19.4"/><path class="sw" d="M20 20 L20 3 A17 17 0 0 1 34.7 11.5 Z"/><circle class="a" cx="20" cy="20" r="17.2"/><circle class="b" cx="20" cy="20" r="13"/><circle class="c" cx="20" cy="20" r="8"/><circle class="d" cx="20" cy="20" r="3"/></svg>
     <div class="hud-d"><div class="hud-t"><i class="blip"></i><span>${st}</span><span class="clk" data-clock>${new Date().toLocaleTimeString('fr-FR')}</span></div>
     <div class="hud-g"><span><b>${z(I.idx.length)}</b>Notes</span><span><b>${z(I.box.length)}</b>Boîte</span><span><b>${z(open)}</b>Tâches</span><span class="${I.asks.length ? 'hot' : ''}"><b>${z(I.asks.length)}</b>Assistant</span><span class="seg" title="Tâches faites">${Array.from({ length: 10 }, (_, i) => `<i class="${i < seg ? 'on' : ''}"></i>`).join('')}</span></div></div></div>`;
   let h = domsHTML() + hud + `<p class="lead"><span class="pr">›</span>${lead}</p>`;
@@ -778,7 +795,7 @@ function dueGroup(root, id) {
 function capture(pre = {}) {
   let task = !!pre.task;
   const pan = layer('Capturer', `
-    <div class="capw"><textarea class="big" id="capT" placeholder="Une idée, une tâche, un lien…">${esc(pre.text || '')}</textarea><span class="tag">● Écoute</span></div>
+    <div class="capw"><textarea class="big" id="capT" placeholder="Une idée, une tâche, un lien…">${esc(pre.text || '')}</textarea><span class="tag"><i class="wv"><b></b><b></b><b></b><b></b><b></b><b></b><b></b></i>Écoute</span></div>
     <div class="thumbs" id="capI"></div>
     <div class="chips" id="capK"><button type="button" class="chip ${task ? '' : 'on'}" data-v="note">Note</button><button type="button" class="chip ${task ? 'on' : ''}" data-v="tache">Tâche</button></div>
     <div class="chips" style="margin-top:6px"><button type="button" class="chip" id="capP">📷 Photo</button></div>
@@ -943,15 +960,16 @@ function scanDoc(el) {
   const blocks = $$('p, li, h3, h4, h5, blockquote, .task, pre, img, hr', el);
   if (!blocks.length) return;
   el.classList.add('digi');
-  const line = document.createElement('div'); line.className = 'scanl'; el.appendChild(line);
+  const line = document.createElement('div'); line.className = 'scanl'; line.innerHTML = '<span class="scant">Scan 000%</span>'; el.appendChild(line); const tag = line.firstChild;
   // La ligne avance à vitesse constante dans la mise en page réelle : chaque bloc change de police
   // à l'instant où elle le touche, et ce qui est en dessous se recale avant d'être atteint (pas de décalage).
-  const v = Math.max(.55, el.offsetHeight / 1200); let y = 0, last = performance.now() + 220;
+  const v = Math.max(.2, el.offsetHeight / 3200); let y = 0, last = performance.now() + 500;
   const tick = now => {
     if (!el.isConnected) return;
     if (now > last) { y += (now - last) * v; last = now; }
-    for (const b of blocks) if (!b.classList.contains('std') && b.offsetTop <= y) b.classList.add('std');
+    for (const b of blocks) if (!b.classList.contains('std') && b.offsetTop <= y) { b.classList.add('std', 'glx'); setTimeout(() => b.classList.remove('glx'), 280); }
     const end = el.offsetHeight;
+    tag.textContent = `Scan ${String(Math.min(100, Math.round(y / end * 100))).padStart(3, '0')}%`;
     line.style.top = Math.min(y, end) + 'px';
     if (y < end) requestAnimationFrame(tick);
     else { el.classList.remove('digi'); blocks.forEach(b => b.classList.remove('std')); line.animate([{ opacity: 1 }, { opacity: 0 }], 300).onfinish = () => line.remove(); }
