@@ -28,6 +28,7 @@ const cap1 = s => s.charAt(0).toUpperCase() + s.slice(1);
 const dueLabel = iso => { const n = daysTo(iso); return n === 0 ? "aujourd'hui" : n === 1 ? 'demain' : n === -1 ? 'hier' : n < 0 ? `retard ${-n} j` : n < 7 ? new Date(iso + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long' }) : frDate(iso, { day: 'numeric', month: 'short' }); };
 const plain = s => String(s || '').replace(/\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|([^\]]+))?\]\]/g, (m, a, b) => b || a).replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/[📅✅]\s*\d{4}-\d{2}-\d{2}/gu, '').replace(/[*`]/g, '').replace(/\s+/g, ' ').trim();
 const cleanTitle = s => String(s || '').replace(/[\\/:*?"<>|#^[\]]/g, ' ').replace(/^[.\s]+/, '').replace(/\s+/g, ' ').trim().slice(0, 80).trim();
+function ping(el) { const r = el.getBoundingClientRect(), d = document.createElement('div'); d.className = 'ping'; d.style.left = r.left + r.width / 2 + 'px'; d.style.top = r.top + r.height / 2 + 'px'; document.body.appendChild(d); setTimeout(() => d.remove(), 650); }
 const vibrate = () => { try { navigator.vibrate?.(8); } catch { } };
 
 const ICON = {
@@ -526,8 +527,24 @@ function render() {
   $$('[data-view]').forEach(b => b.classList.toggle('on', b.dataset.view === view));
   $('#view').innerHTML = { today: vToday, projets: vProjets, taches: vTaches, notes: vNotes, boite: vBoite }[view](I, late);
   bindView();
+  if (view === 'today' && !typed && meta.last) typeLead();
   paint(sstate, serr);
   document.title = (I.box.length ? `(${I.box.length}) ` : '') + 'Cerveau';
+}
+// La phrase du jour s'écrit lettre par lettre, une seule fois à l'ouverture
+let typed = false;
+function typeLead() {
+  const el = $('.lead'); if (!el || matchMedia('(prefers-reduced-motion: reduce)').matches) { typed = true; return; }
+  typed = true;
+  const full = el.innerHTML, pr = $('.pr', el).outerHTML, txt = el.textContent.replace(/^›/, '');
+  let i = 0; el.innerHTML = pr + '<span class="caret"></span>';
+  const step = () => {
+    if (!el.isConnected) return;
+    i += 2; el.innerHTML = pr + esc(txt.slice(0, i)) + '<span class="caret"></span>';
+    if (i < txt.length) setTimeout(step, 16);
+    else { el.innerHTML = full + '<span class="caret"></span>'; setTimeout(() => $('.caret', el)?.classList.add('off'), 2200); }
+  };
+  setTimeout(step, 250);
 }
 function go(v) { view = v; saveUI(); scrollTo({ top: 0 }); render(); }
 
@@ -547,7 +564,9 @@ function vToday(I, lateAll) {
     : !projs.length ? `Aucun projet en cours${sphere ? ' ici' : ''}. Un projet, c'est un objectif avec une fin : <em>lance le premier</em>.`
     : revDue ? `Tout est calme. C'est <em>le bon moment pour la revue</em> de la semaine.`
     : `Rien d'urgent. Une idée qui passe ? <em>Capture-la</em>, ta tête n'est pas faite pour stocker.`;
-  let h = domsHTML() + `<p class="lead">${lead}</p>`;
+  const pend = Object.values(notes).filter(n => n.dirty).length;
+  const hud = `<div class="hud"><span>Notes <b>${I.idx.length}</b></span><span>Boîte <b>${I.box.length}</b></span><span>Tâches ouvertes <b>${I.tasks.filter(t => !t.done).length}</b></span><span>${!ghReady() ? 'Hors ligne · local' : sstate === 'err' ? 'Synchro · erreur' : pend ? `Synchro · ${pend} en attente` : 'Synchro · OK'}</span></div>`;
+  let h = domsHTML() + hud + `<p class="lead"><span class="pr">›</span>${lead}</p>`;
   if (late.length || tod.length) h += lbl('À faire aujourd’hui', 'Toutes les tâches', 'taches', late.length ? '' : '') + `<div class="list">${[...late, ...tod].slice(0, 8).map(t => taskRow(t)).join('')}</div>`;
   if (I.box.length) h += lbl(`Boîte de réception · ${I.box.length}`, 'Trier', 'boite') + `<div class="list">${I.box.slice(0, 3).map(noteRow).join('')}</div>`;
   if (week.length) h += lbl('Cette semaine') + `<div class="list">${week.slice(0, 6).map(t => taskRow(t)).join('')}</div>`;
@@ -635,7 +654,7 @@ const ACTS = { settings: () => settings(), search: () => search(), journal: () =
 document.addEventListener('click', e => {
   const wl = e.target.closest('[data-wl]'); if (wl) { e.preventDefault(); return openWiki(wl.dataset.wl); }
   if (e.target.closest('a[target]')) return;
-  const tk = e.target.closest('[data-tk]'); if (tk) { const t = TK[+tk.dataset.tk]; if (t) { toggleLine(t.path, t.line, t.raw); render(); } return; }
+  const tk = e.target.closest('[data-tk]'); if (tk) { const t = TK[+tk.dataset.tk]; if (t) { if (toggleLine(t.path, t.line, t.raw)) ping(tk); render(); } return; }
   const sp = e.target.closest('[data-sph]'); if (sp) { sphere = sp.dataset.sph; saveUI(); return render(); }
   const vw = e.target.closest('[data-view]'); if (vw) return go(vw.dataset.view);
   if (e.target.closest('[data-cap]')) return capture();
@@ -797,7 +816,7 @@ function openNote(path) {
   $('#nMd', pan).addEventListener('click', e => {
     const b = e.target.closest('[data-tl]'); if (!b) return;
     const i = +b.dataset.tl;
-    toggleLine(path, i, notes[path].text.split('\n')[i]);
+    if (toggleLine(path, i, notes[path].text.split('\n')[i])) ping(b);
     const y = info(path); $('#nMd', pan).innerHTML = md(y.body, notes[path].text.split('\n').length - y.body.split('\n').length); render();
   });
   const on = (s, f) => { const el = $(s, pan); if (el) el.onclick = f; };

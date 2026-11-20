@@ -221,3 +221,26 @@ a[data-wl].miss{opacity:.55}
   .toast{bottom:28px}
 }
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* ---------- Touches « assistant » (discrètes) : lueur cyan, lecture façon HUD ---------- */
+:root{--hud:#1593b8;--hud-soft:rgba(21,147,184,.14)}
+html[data-theme="dark"]{--hud:#4fd6ff;--hud-soft:rgba(79,214,255,.16)}
+/* 1. La phrase du jour s'écrit comme une réponse d'assistant */
+.lead .pr{font:600 .7em var(--mono);color:var(--hud);margin-right:8px;vertical-align:.15em}
+.caret{display:inline-block;width:.5em;height:1em;margin-left:3px;vertical-align:-.12em;background:var(--hud);box-shadow:0 0 8px var(--hud);animation:blink 1s steps(1) infinite}
+.caret.off{animation:fadeout .6s forwards}
+@keyframes blink{50%{opacity:0}}
+@keyframes fadeout{to{opacity:0;width:0;margin:0}}
+/* 2. Ligne d'état façon lecture d'instruments, avec coins en crochets */
+.hud{display:flex;flex-wrap:wrap;gap:4px 14px;margin:10px 0 0;padding:7px 10px;font:500 10px/1.3 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--hud);
+  background:linear-gradient(var(--hud),var(--hud)) 0 0/8px 1px,linear-gradient(var(--hud),var(--hud)) 0 0/1px 8px,linear-gradient(var(--hud),var(--hud)) 100% 0/8px 1px,linear-gradient(var(--hud),var(--hud)) 100% 0/1px 8px,
+  linear-gradient(var(--hud),var(--hud)) 0 100%/8px 1px,linear-gradient(var(--hud),var(--hud)) 0 100%/1px 8px,linear-gradient(var(--hud),var(--hud)) 100% 100%/8px 1px,linear-gradient(var(--hud),var(--hud)) 100% 100%/1px 8px;background-repeat:no-repeat;opacity:.85}
+.hud span{white-space:nowrap}
+.hud b{font-weight:700}
+/* 3. Synchro : un arc tourne autour du point ; tâche cochée : une onde s'en va */
+.sync{position:relative}
+.sync.busy::after{content:"";position:absolute;inset:-5px;border-radius:50%;border:1.5px solid transparent;border-top-color:var(--hud);border-right-color:var(--hud);animation:rot .8s linear infinite}
+.sync.busy,.sync.pending{background:var(--hud);box-shadow:0 0 6px var(--hud)}
+.ping{position:fixed;width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;border:1.5px solid var(--hud);pointer-events:none;z-index:95;animation:ping .6s ease-out forwards}
+@keyframes ping{from{transform:scale(1);opacity:.9}to{transform:scale(2.6);opacity:0}}
+.big:focus{border-color:var(--hud);box-shadow:0 0 0 3px var(--hud-soft)}
