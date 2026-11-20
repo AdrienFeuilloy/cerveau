@@ -50,7 +50,9 @@ const ICON = {
 const ico = (n, size) => `<svg class="i" viewBox="0 0 24 24"${size ? ` style="width:${size}px;height:${size}px"` : ''} aria-hidden="true">${ICON[n]}</svg>`;
 
 /* ---------- Réglages (sur cet appareil) ---------- */
-const cfg = Object.assign({ owner: 'AdrienFeuilloy', repo: 'cerveau-data', branch: 'main', token: '', root: '', theme: 'auto' }, read('config', {}) || {});
+const cfg = Object.assign({ owner: 'AdrienFeuilloy', repo: 'phant-studio-data', branch: 'main', token: '', root: 'Cerveau', theme: 'auto' }, read('config', {}) || {});
+// Même dépôt privé que les applis de Quotidien (même domaine GitHub Pages) : on reprend son jeton, rien à ressaisir
+if (!cfg.token) { try { const hub = JSON.parse(localStorage.getItem('hub.github') || '{}'); if (hub.token && (hub.repo || '').toLowerCase() === cfg.repo.toLowerCase() && (hub.owner || '').toLowerCase() === cfg.owner.toLowerCase()) { cfg.token = hub.token; cfg.branch = hub.branch || cfg.branch; } } catch { } }
 const saveCfg = () => write('config', cfg);
 const ghReady = () => !!(cfg.owner && cfg.repo && cfg.token);
 function applyTheme() {
@@ -551,7 +553,7 @@ function go(v) { view = v; saveUI(); scrollTo({ top: 0 }); render(); }
 
 /* ---------- Aujourd'hui ---------- */
 function vToday(I, lateAll) {
-  if (!ghReady() && !Object.keys(notes).length) return `<p class="lead">Bienvenue. Pour retrouver tes notes sur le téléphone <em>et</em> l'ordinateur, relie Cerveau à ton dépôt GitHub privé.</p><div class="btns"><button class="btn" data-act="settings">Relier mon dépôt</button></div>`;
+  if (!ghReady() && !Object.keys(notes).length) return `<p class="lead">Bienvenue. Pour retrouver tes notes sur le téléphone <em>et</em> l'ordinateur, relie Cerveau à ton dépôt GitHub privé (le même que Quotidien).</p><div class="btns"><button class="btn" data-act="settings">Relier mon dépôt</button></div>`;
   if (ghReady() && !meta.last && !Object.keys(notes).length) return sstate === 'err' ? `<p class="lead">Impossible d'ouvrir le dépôt : ${esc(serr)}.</p><div class="btns"><button class="btn" data-act="settings">Vérifier les réglages</button></div>` : `<div class="spin"></div><p class="hint" style="text-align:center">Chargement de tes notes…</p>`;
   const T = I.tasks.filter(t => !t.done && inS2(t));
   const late = T.filter(t => t.due && t.due < today()).sort((a, b) => a.due.localeCompare(b.due)), tod = T.filter(t => t.due === today());

@@ -3,9 +3,9 @@
 Mon second cerveau, selon la méthode **PARA** : capturer vite, trier, agir, revoir chaque semaine.
 Une appli web installable (téléphone et ordinateur), hébergée sur GitHub Pages.
 
-Les notes ne sont **pas** dans ce dépôt : ce sont de simples fichiers Markdown rangés dans un **dépôt privé** séparé, lu et écrit directement depuis l'appli avec un jeton GitHub. Ce dépôt-ci ne contient que le code.
+Les notes ne sont **pas** dans ce dépôt : ce sont de simples fichiers Markdown rangés dans le dossier `Cerveau/` d'un **dépôt privé**, lu et écrit directement depuis l'appli avec un jeton GitHub. Ce dépôt-ci ne contient que le code.
 
-## Organisation des notes (dépôt privé)
+## Organisation des notes (dossier `Cerveau/` du dépôt privé)
 
 | Dossier | Contenu |
 |---|---|
@@ -23,7 +23,7 @@ Les notes ne sont **pas** dans ce dépôt : ce sont de simples fichiers Markdown
 
 ## Réglages (une fois par appareil)
 
-Icône réglages → **Propriétaire**, **Dépôt** (le dépôt privé des notes), **Branche**, **Jeton**.
+Icône réglages → **Propriétaire**, **Dépôt** (le dépôt privé), **Branche**, **Dossier** (`Cerveau`), **Jeton**. Si un jeton est déjà enregistré pour ce même dépôt sur ce navigateur, il est repris automatiquement.
 
 Jeton : GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens. Accès au seul dépôt des notes, permission **Contents : Read and write**.
 
