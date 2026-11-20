@@ -54,3 +54,7 @@ demande: 2026-11-20
 ```
 
 Traitement : la réponse est ajoutée sous `## Réponse de l'assistant`, puis l'en-tête passe à `assistant: fait` avec `traite: AAAA-MM-JJ`. Les notes à traiter apparaissent dans « Aujourd'hui » et dans le compteur du bloc d'état.
+
+## Polices
+
+Les touches « HUD » utilisent Share Tech Mono et Orbitron (licence SIL Open Font License, fichiers dans `fonts/`), hébergées avec l'appli : aucune requête vers un service externe.

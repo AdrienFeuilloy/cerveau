@@ -571,7 +571,7 @@ function shell() {
         <div class="acts"><button class="ib" data-act="sync" aria-label="Synchroniser"><span data-sync class="sync"></span></button><button class="ib" data-view="boite" aria-label="Boîte">${ico('inbox')}<span class="bdg" id="bdg" hidden></span></button><button class="ib" data-act="search" aria-label="Rechercher">${ico('search')}</button><button class="ib" data-act="settings" aria-label="Réglages">${ico('set')}</button></div>
       </header>
       <div id="view"></div>
-      <p class="foot">Cerveau · v1.3.0</p>
+      <p class="foot">Cerveau · v1.4.0</p>
     </div></main>
     <nav class="tabs">
       <button data-view="today">${ico('today')}Aujourd’hui</button><button data-view="projets">${ico('proj')}Projets</button>
@@ -605,12 +605,12 @@ function typeLead() {
   const el = $('.lead'); if (!el || matchMedia('(prefers-reduced-motion: reduce)').matches) { typed = true; return; }
   typed = true;
   const full = el.innerHTML, pr = $('.pr', el).outerHTML, txt = el.textContent.replace(/^›/, '');
-  let i = 0; el.innerHTML = pr + '<span class="caret"></span>';
+  let i = 0; el.classList.add('typing'); el.innerHTML = pr + '<span class="caret"></span>';
   const step = () => {
     if (!el.isConnected) return;
     i += 2; el.innerHTML = pr + esc(txt.slice(0, i)) + '<span class="caret"></span>';
     if (i < txt.length) setTimeout(step, 16);
-    else { el.innerHTML = full + '<span class="caret"></span>'; setTimeout(() => $('.caret', el)?.classList.add('off'), 2200); }
+    else { el.innerHTML = full + '<span class="caret"></span>'; setTimeout(() => { el.classList.remove('typing'); $('.caret', el)?.classList.add('off'); }, 900); }
   };
   setTimeout(step, 250);
 }
@@ -905,6 +905,7 @@ function openNote(path) {
       ${x.kind === 'archive' ? '<button class="btn line" id="nUn">Sortir des archives</button>' : x.kind !== 'boite' && !isProj ? '<button class="btn line" id="nArc">Archiver</button>' : ''}
       <button class="btn bad" id="nDel">Supprimer</button></div>
     <p class="path">${esc(path)}</p>`, { page: true, actions: `<button class="ib" id="nEd" aria-label="Modifier">${ico('edit')}</button>` });
+  scanDoc($('#nMd', pan));
   $('#nMd', pan).addEventListener('click', e => {
     const b = e.target.closest('[data-tl]'); if (!b) return;
     const i = +b.dataset.tl;
@@ -934,6 +935,25 @@ function askSheet(path) {
   setTimeout(() => $('#aC', pan).focus(), 120);
   $('#aOk', pan).onclick = () => { setFm(path, { assistant: 'à traiter', consigne: $('#aC', pan).value.trim().replace(/\s+/g, ' ') || undefined, demande: today(), traite: undefined }); toast('Confiée à l’assistant ◆'); vibrate(); render(); openNote(path); };
   if ($('#aOff', pan)) $('#aOff', pan).onclick = () => { setFm(path, { assistant: undefined, consigne: undefined, demande: undefined }); toast('Retirée'); render(); openNote(path); };
+}
+
+/* Le scanner : une ligne lumineuse descend la note ; chaque bloc passe du digital à sa police normale à son passage */
+function scanDoc(el) {
+  if (!el || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const blocks = $$('p, li, h3, h4, h5, blockquote, .task, pre, img, hr', el);
+  if (!blocks.length) return;
+  el.classList.add('digi');
+  const line = document.createElement('div'); line.className = 'scanl'; el.appendChild(line);
+  const t0 = performance.now() + 220, dur = Math.min(1900, 650 + el.scrollHeight * 1.1);
+  const tick = now => {
+    if (!el.isConnected) return;
+    const k = Math.max(0, Math.min(1, (now - t0) / dur)), e = k < .5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2, y = e * el.offsetHeight;
+    line.style.top = y + 'px';
+    for (const b of blocks) if (!b.classList.contains('std') && b.offsetTop + 4 < y) b.classList.add('std');
+    if (k < 1) requestAnimationFrame(tick);
+    else { el.classList.remove('digi'); blocks.forEach(b => b.classList.remove('std')); line.animate([{ opacity: 1 }, { opacity: 0 }], 300).onfinish = () => line.remove(); }
+  };
+  requestAnimationFrame(tick);
 }
 
 /* ---------- Déplacer ---------- */
