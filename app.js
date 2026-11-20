@@ -333,7 +333,7 @@ Un seul endroit fiable pour tout ce qui compte, entre vie perso, boulot et [[Pha
 function info(path) {
   const n = notes[path], { fm, order, body } = parse(n.text), kind = kindOf(path);
   const stamp = Math.max(n.at || 0, Date.parse(fm.modifie || fm.cree || '') || 0, kind === 'journal' && isISO(titleOf(path)) ? Date.parse(titleOf(path)) : 0);
-  return { path, title: titleOf(path), kind, sub: subOf(path), fm, order, body, dom: SPHERES.some(s => s.id === fm.domaine) ? fm.domaine : '', stamp };
+  return { path, title: titleOf(path), kind, sub: subOf(path), fm, order, body, dom: SPHERES.some(s => s.id === fm.domaine) ? fm.domaine : '', stamp, ask: fm.assistant === 'à traiter', asked: fm.assistant === 'fait' };
 }
 function tasksOf(x) {
   const out = [];
@@ -351,6 +351,7 @@ function buildIndex() {
     idx, tasks: idx.filter(x => x.kind !== 'archive').flatMap(tasksOf),
     box: idx.filter(x => x.kind === 'boite').sort((a, b) => b.stamp - a.stamp),
     projs: idx.filter(x => x.kind === 'projet'), doms: idx.filter(x => x.kind === 'domaine'),
+    asks: idx.filter(x => x.ask).sort((a, b) => (a.fm.demande || '').localeCompare(b.fm.demande || '')),
   };
 }
 const byTitle = (a, b) => a.title.localeCompare(b.title, 'fr');
@@ -485,7 +486,8 @@ function projRow(p) {
   const late = isISO(p.fm.echeance) && p.fm.echeance < today() && p.fm.statut !== 'terminé';
   return `<button class="row" data-open="${esc(p.path)}"><span class="gl" style="color:${sc(p.dom)}">${ico('proj', 18)}</span><span class="m"><span class="t" style="font-family:var(--serif);font-size:16.5px">${esc(p.title)}</span><span class="s">${nx ? '→ ' + esc(plain(nx.text)) : ts.length ? 'Tout est fait' : 'Aucune tâche'}</span><span class="bar" style="--c:${sc(p.dom)}"><i style="width:${pc}%"></i></span></span><span class="r">${isISO(p.fm.echeance) ? `<span class="${late ? 'late' : ''}">${frDate(p.fm.echeance, { day: 'numeric', month: 'short' })}</span><br>` : ''}${ts.length ? `${d}/${ts.length}` : ''}</span></button>`;
 }
-const noteRow = x => `<button class="row" data-open="${esc(x.path)}"><span class="gl">${dot(x.dom) || '<span class="dot" style="--c:var(--line)"></span>'}</span><span class="m"><span class="t">${esc(x.title)}</span><span class="s">${esc(excerpt(x) || x.sub || KIND(x.kind)?.label || '')}</span></span><span class="r">${x.stamp ? frDate(new Date(x.stamp).toISOString().slice(0, 10), { day: 'numeric', month: 'short' }) : ''}</span></button>`;
+const askRow = x => `<button class="row" data-open="${esc(x.path)}"><span class="gl ask">◆</span><span class="m"><span class="t">${esc(x.title)}</span><span class="s">${esc(plain(x.fm.consigne || '') || excerpt(x) || 'Consigne dans la note')}</span></span><span class="r">${x.fm.demande ? frDate(x.fm.demande, { day: 'numeric', month: 'short' }) : ''}</span></button>`;
+const noteRow = x => `<button class="row" data-open="${esc(x.path)}"><span class="gl${x.ask ? ' ask' : ''}">${x.ask ? '◆' : dot(x.dom) || '<span class="dot" style="--c:var(--line)"></span>'}</span><span class="m"><span class="t">${esc(x.title)}</span><span class="s">${esc(excerpt(x) || x.sub || KIND(x.kind)?.label || '')}</span></span><span class="r">${x.stamp ? frDate(new Date(x.stamp).toISOString().slice(0, 10), { day: 'numeric', month: 'short' }) : ''}</span></button>`;
 
 function shell() {
   document.body.innerHTML = `<div class="app">
@@ -506,7 +508,7 @@ function shell() {
         <div class="acts"><button class="ib" data-act="sync" aria-label="Synchroniser"><span data-sync class="sync"></span></button><button class="ib" data-view="boite" aria-label="Boîte">${ico('inbox')}<span class="bdg" id="bdg" hidden></span></button><button class="ib" data-act="search" aria-label="Rechercher">${ico('search')}</button><button class="ib" data-act="settings" aria-label="Réglages">${ico('set')}</button></div>
       </header>
       <div id="view"></div>
-      <p class="foot">Cerveau · v1.0.0</p>
+      <p class="foot">Cerveau · v1.1.0</p>
     </div></main>
     <nav class="tabs">
       <button data-view="today">${ico('today')}Aujourd’hui</button><button data-view="projets">${ico('proj')}Projets</button>
@@ -572,10 +574,11 @@ function vToday(I, lateAll) {
   const st = !ghReady() ? 'Mode local' : sstate === 'err' ? 'Liaison · erreur' : pend ? `Liaison · ${pend} en attente` : 'Liaison GitHub · OK';
   const hud = `<div class="hud" aria-hidden="true"><svg class="hud-ring" viewBox="0 0 40 40"><circle class="a" cx="20" cy="20" r="18"/><circle class="b" cx="20" cy="20" r="13"/><circle class="c" cx="20" cy="20" r="8"/><circle class="d" cx="20" cy="20" r="3"/></svg>
     <div class="hud-d"><div class="hud-t"><i class="blip"></i><span>${st}</span><span class="clk" data-clock>${new Date().toLocaleTimeString('fr-FR')}</span></div>
-    <div class="hud-g"><span><b>${z(I.idx.length)}</b>Notes</span><span><b>${z(I.box.length)}</b>Boîte</span><span><b>${z(open)}</b>Tâches</span><span class="seg" title="Tâches faites">${Array.from({ length: 10 }, (_, i) => `<i class="${i < seg ? 'on' : ''}"></i>`).join('')}</span></div></div></div>`;
+    <div class="hud-g"><span><b>${z(I.idx.length)}</b>Notes</span><span><b>${z(I.box.length)}</b>Boîte</span><span><b>${z(open)}</b>Tâches</span><span class="${I.asks.length ? 'hot' : ''}"><b>${z(I.asks.length)}</b>Assistant</span><span class="seg" title="Tâches faites">${Array.from({ length: 10 }, (_, i) => `<i class="${i < seg ? 'on' : ''}"></i>`).join('')}</span></div></div></div>`;
   let h = domsHTML() + hud + `<p class="lead"><span class="pr">›</span>${lead}</p>`;
   if (late.length || tod.length) h += lbl('À faire aujourd’hui', 'Toutes les tâches', 'taches', late.length ? '' : '') + `<div class="list">${[...late, ...tod].slice(0, 8).map(t => taskRow(t)).join('')}</div>`;
   if (I.box.length) h += lbl(`Boîte de réception · ${I.box.length}`, 'Trier', 'boite') + `<div class="list">${I.box.slice(0, 3).map(noteRow).join('')}</div>`;
+  if (I.asks.length) h += lbl(`Pour l’assistant · ${I.asks.length}`) + `<div class="list">${I.asks.map(askRow).join('')}</div>`;
   if (week.length) h += lbl('Cette semaine') + `<div class="list">${week.slice(0, 6).map(t => taskRow(t)).join('')}</div>`;
   h += lbl('Projets en cours', projs.length ? 'Tous' : '', 'projets') + (projs.length ? `<div class="list">${projs.slice(0, 5).map(projRow).join('')}</div>` : `<div class="list"><p class="empty">Aucun projet en cours.</p></div><div class="btns"><button class="btn line" data-act="newproj">＋ Nouveau projet</button></div>`);
   h += `<div class="duo"><button data-act="journal"><b>Journal du jour</b><small>${cap1(frDate(today(), { weekday: 'long', day: 'numeric', month: 'long' }))}</small></button><button data-act="review"><b>Revue de la semaine</b><small>${UI.review ? 'Dernière le ' + frDate(UI.review, { day: 'numeric', month: 'short' }) : 'Jamais faite'}${revDue ? ' · <span style="color:var(--acc);font-weight:700">à faire</span>' : ''}</small></button></div>`;
@@ -712,6 +715,7 @@ function capture(pre = {}) {
   const pan = layer('Capturer', `
     <div class="capw"><textarea class="big" id="capT" placeholder="Une idée, une tâche, un lien…">${esc(pre.text || '')}</textarea><span class="tag">● Écoute</span></div>
     <div class="chips" id="capK"><button type="button" class="chip ${task ? '' : 'on'}" data-v="note">Note</button><button type="button" class="chip ${task ? 'on' : ''}" data-v="tache">Tâche</button></div>
+    <label class="askchk"><input type="checkbox" id="capA" ${pre.ask ? 'checked' : ''}> ◆ Pour l’assistant <small>la note est la consigne</small></label>
     <div id="capD" ${task ? '' : 'hidden'}><span class="sub" style="margin-top:8px">Échéance</span>${dueChips('capDue', pre.due || '')}</div>
     <span class="sub" style="margin-top:10px">Domaine</span>${domChips('capS', pre.dom ?? sphere)}
     <div class="fld" style="margin-top:12px"><label for="capTo">Ranger dans</label><select id="capTo"><option value="">Boîte de réception (je trierai plus tard)</option>${targetOptions(pre.to || '')}</select></div>
@@ -723,12 +727,12 @@ function capture(pre = {}) {
   $('#capT', pan).onkeydown = e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) $('#capOk', pan).click(); };
   $('#capOk', pan).onclick = () => {
     const text = $('#capT', pan).value.trim(); if (!text) return toast('Écris quelque chose');
-    const to = $('#capTo', pan).value, due = task ? getDue() : '', dom = getS();
-    if (to && notes[to]) { appendTo(to, { text, task, due }); toast(`Ajouté à « ${titleOf(to)} »`); }
+    const to = $('#capTo', pan).value, due = task ? getDue() : '', dom = getS(), ask = $('#capA', pan).checked;
+    if (to && notes[to] && !ask) { appendTo(to, { text, task, due }); toast(`Ajouté à « ${titleOf(to)} »`); }
     else {
       const b = task ? text.split('\n').filter(l => l.trim()).map(l => TASK.test(l.trim()) ? l.trim() : `- [ ] ${l.trim()}${due ? ' 📅 ' + due : ''}`).join('\n') : text;
-      createNote(uniquePath(dirOf('boite'), firstLine(text) || 'Capture'), build({ cree: today(), domaine: dom || undefined }, b + '\n'));
-      toast('Dans la boîte');
+      createNote(uniquePath(dirOf('boite'), firstLine(text) || 'Capture'), build({ cree: today(), domaine: dom || undefined, ...(ask ? { assistant: 'à traiter', demande: today(), ...(to && notes[to] ? { consigne: `Concerne [[${titleOf(to)}]]` } : {}) } : {}) }, b + '\n'));
+      toast(ask ? 'Confiée à l’assistant ◆' : 'Dans la boîte');
     }
     vibrate(); closeLayer(() => render()); render();
   };
@@ -809,13 +813,15 @@ function openNote(path) {
     x.fm.type === 'projet' ? `<span>${esc(x.fm.statut || 'actif')}</span>` : '',
     isISO(x.fm.echeance) ? `<span class="${x.fm.echeance < today() && x.fm.statut !== 'terminé' ? 'late' : ''}">échéance ${frDate(x.fm.echeance)}</span>` : '',
     ts.length ? `<span>${ts.filter(t => t.done).length}/${ts.length} faites</span>` : '',
+    x.ask ? '<span class="askb">◆ Assistant · à traiter</span>' : x.asked ? `<span class="askb done">◆ Traité${isISO(x.fm.traite) ? ' le ' + frDate(x.fm.traite, { day: 'numeric', month: 'short' }) : ''}</span>` : '',
     ...[].concat(x.fm.tags || []).map(t => `<span>#${esc(t)}</span>`)].filter(Boolean).join('');
   const pan = layer('', `
     <div class="ntitle">${esc(x.title)}</div>
     <div class="nmeta">${metaBits}</div>
+    ${x.ask && x.fm.consigne ? `<div class="askbox"><span>◆ Consigne pour l’assistant</span>${esc(x.fm.consigne)}</div>` : ''}
     <div class="doc" id="nMd">${md(x.body, offset) || '<p class="empty">Note vide. Touche le crayon pour écrire.</p>'}</div>
     ${back.length ? lbl('Mentionnée dans') + `<div class="list">${back.map(noteRow).join('')}</div>` : ''}
-    <div class="btns" style="margin-top:26px">${x.kind === 'boite' ? '<button class="btn" id="nCl">Trier</button>' : ''}<button class="btn line" id="nMv">Déplacer</button>
+    <div class="btns" style="margin-top:26px">${x.kind === 'boite' ? '<button class="btn" id="nCl">Trier</button>' : ''}<button class="btn line" id="nMv">Déplacer</button><button class="btn line askbtn" id="nAsk">◆ ${x.ask ? 'Consigne' : 'Confier à l’assistant'}</button>
       ${isProj && x.fm.statut !== 'terminé' ? '<button class="btn line" id="nEnd">Projet terminé</button>' : ''}
       ${x.kind === 'archive' ? '<button class="btn line" id="nUn">Sortir des archives</button>' : x.kind !== 'boite' && !isProj ? '<button class="btn line" id="nArc">Archiver</button>' : ''}
       <button class="btn bad" id="nDel">Supprimer</button></div>
@@ -830,10 +836,25 @@ function openNote(path) {
   on('#nEd', () => editNote(path));
   on('#nCl', () => classify(path, false));
   on('#nMv', () => moveSheet(path));
+  on('#nAsk', () => askSheet(path));
   on('#nEnd', () => { setFm(path, { statut: 'terminé', fini: today() }); const np = moveNote(path, uniquePath(dirOf('archive'), x.title)); vibrate(); toast('Bravo ! Projet rangé dans les archives'); render(); openNote(np); });
   on('#nArc', () => { const np = moveNote(path, uniquePath(dirOf('archive'), x.title)); toast('Archivé'); render(); openNote(np); });
   on('#nUn', () => { const k = x.fm.type === 'projet' ? 'projet' : x.fm.type === 'domaine' ? 'domaine' : 'ressource'; if (k === 'projet') setFm(path, { statut: 'actif', fini: undefined }); const np = moveNote(path, uniquePath(dirOf(k), x.title)); toast('Sorti des archives'); render(); openNote(np); });
   on('#nDel', () => { if (!confirm(`Supprimer « ${x.title} » ? (l'historique GitHub en garde une copie)`)) return; deleteNote(path); closeLayer(() => render()); render(); toast('Supprimée'); });
+}
+
+/* ---------- Confier une note à l'assistant ----------
+   En-tête : assistant: à traiter | fait ; consigne ; demande (date) ; traite (date).
+   L'assistant répond dans la note, sous « ## Réponse de l'assistant », puis passe la note à « fait ». */
+function askSheet(path) {
+  const x = info(path);
+  const pan = layer('Confier à l’assistant', `<p class="hint" style="margin-top:0">« ${esc(x.title)} »</p>
+    <div class="capw"><textarea class="big" id="aC" placeholder="Que dois-je en faire ? Ex. « Développe cette idée », « Fais-en un plan », « Cherche des exemples »…">${esc(x.fm.consigne || '')}</textarea><span class="tag">◆ Consigne</span></div>
+    <p class="hint">La note et sa consigne seront traitées à ta prochaine demande. La réponse s'ajoutera en bas de la note.</p>
+    <div class="btns">${x.ask ? '<button class="btn line" id="aOff">Retirer</button>' : ''}<button class="btn" id="aOk">${x.ask ? 'Mettre à jour' : 'Confier'}</button></div>`);
+  setTimeout(() => $('#aC', pan).focus(), 120);
+  $('#aOk', pan).onclick = () => { setFm(path, { assistant: 'à traiter', consigne: $('#aC', pan).value.trim().replace(/\s+/g, ' ') || undefined, demande: today(), traite: undefined }); toast('Confiée à l’assistant ◆'); vibrate(); render(); openNote(path); };
+  if ($('#aOff', pan)) $('#aOff', pan).onclick = () => { setFm(path, { assistant: undefined, consigne: undefined, demande: undefined }); toast('Retirée'); render(); openNote(path); };
 }
 
 /* ---------- Déplacer ---------- */

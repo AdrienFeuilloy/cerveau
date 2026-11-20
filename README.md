@@ -39,3 +39,15 @@ Jeton : GitHub → Settings → Developer settings → Personal access tokens �
 - Bouton ＋ de l'appli, ou appui long sur l'icône → « Capturer ».
 - **Partager → Cerveau** depuis n'importe quelle appli (Android, appli installée).
 - Sur ordinateur : touche `N` pour capturer, `/` pour chercher, `Ctrl + Entrée` pour valider, `Ctrl + S` pour enregistrer une note.
+
+## Confier une note à l'assistant
+
+Bouton **◆ Confier à l'assistant** dans une note (ou case « Pour l'assistant » à la capture). L'en-tête de la note reçoit :
+
+```yaml
+assistant: à traiter
+consigne: Fais-en un plan
+demande: 2026-11-20
+```
+
+Traitement : la réponse est ajoutée sous `## Réponse de l'assistant`, puis l'en-tête passe à `assistant: fait` avec `traite: AAAA-MM-JJ`. Les notes à traiter apparaissent dans « Aujourd'hui » et dans le compteur du bloc d'état.

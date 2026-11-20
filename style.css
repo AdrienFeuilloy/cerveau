@@ -250,12 +250,13 @@ html[data-theme="dark"]{--hud:#ff9a2e;--hud-soft:rgba(255,154,46,.14);--hud-glow
 .hud-t{display:flex;align-items:center;gap:8px;opacity:.8;margin-bottom:5px}
 .hud-t .blip{width:6px;height:6px;border-radius:50%;background:var(--hud);box-shadow:0 0 6px var(--hud-glow);animation:glow 1.2s steps(2) infinite}
 .hud-t .clk{margin-left:auto;font-variant-numeric:tabular-nums}
-.hud-g{display:grid;grid-template-columns:repeat(3,auto) 1fr;gap:2px 14px;align-items:end}
+.hud-g{display:grid;grid-template-columns:repeat(4,auto) 1fr;gap:2px 14px;align-items:end}
+.hud-g .hot b{animation:glow 1.6s ease-in-out infinite}
 .hud-g b{display:block;font:600 17px/1 var(--mono);letter-spacing:.04em;text-shadow:0 0 8px var(--hud-glow)}
 .seg{display:flex;gap:2px;align-self:center;justify-self:end}
 .seg i{width:5px;height:12px;border:1px solid var(--hud);opacity:.5}
 .seg i.on{background:var(--hud);opacity:1;box-shadow:0 0 4px var(--hud-glow)}
-@media (max-width:380px){.seg{display:none}}
+@media (max-width:520px){.seg{display:none}}
 
 /* 3. Synchro : deux arcs en sens contraires autour du point ; cochage : onde + mire */
 .sync{position:relative}
@@ -279,3 +280,14 @@ html[data-theme="dark"]{--hud:#ff9a2e;--hud-soft:rgba(255,154,46,.14);--hud-glow
 .capw .big:focus{border-color:var(--hud);box-shadow:0 0 0 3px var(--hud-soft),0 0 18px var(--hud-soft)}
 .capw .tag{position:absolute;right:10px;bottom:9px;font:600 9.5px var(--mono);letter-spacing:.16em;color:var(--hud);opacity:0;transition:opacity .2s}
 .capw:focus-within .tag{opacity:.8}
+
+/* Notes confiées à l'assistant : le losange ◆ et la couleur HUD */
+.gl.ask,.askb{color:var(--hud)}
+.gl.ask{font-size:13px;text-shadow:0 0 6px var(--hud-glow)}
+.askb.done{opacity:.6}
+.askbox{border-left:2px solid var(--hud);background:var(--hud-soft);padding:8px 12px;margin:-4px 0 16px;font-size:14px;border-radius:0 8px 8px 0}
+.askbox span{display:block;font:600 10px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--hud);margin-bottom:2px}
+.askbtn{color:var(--hud)!important;border-color:var(--hud)!important}
+.askchk{display:flex;align-items:center;gap:8px;font-weight:600;font-size:13.5px;color:var(--hud);margin:4px 0 2px;cursor:pointer}
+.askchk input{width:18px;height:18px;accent-color:var(--hud)}
+.askchk small{font-weight:500;color:var(--mut)}
