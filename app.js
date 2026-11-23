@@ -686,7 +686,7 @@ function shell() {
         <div class="acts"><button class="ib" data-act="sync" aria-label="Synchroniser"><span data-sync class="sync"></span></button><button class="ib" data-act="search" aria-label="Rechercher">${ico('search')}</button><button class="ib" data-act="settings" aria-label="Réglages">${ico('set')}</button></div>
       </header>
       <div id="view"></div>
-      <p class="foot">Cerveau · v2.2.0</p>
+      <p class="foot">Cerveau · v2.3.0</p>
     </div></main>
     <nav class="tabs">
       <button data-view="today">${ico('today')}Aujourd’hui</button><button data-view="afaire">${ico('task')}À faire</button>
@@ -792,7 +792,7 @@ function vToday(I, lateAll) {
 /* ---------- Boîte ---------- */
 function vBoite(I) {
   if (!I.box.length) return `<p class="lead">Boîte vide. <em>Rien ne traîne</em>, ni ici ni dans ta tête.</p><div class="btns"><button class="btn" data-cap>＋ Capturer</button></div>`;
-  return hudm(`File d'attente ▸ <b>${z3(I.box.length)}</b> élément${I.box.length > 1 ? 's' : ''}`, '<span class="blink">● Tri requis</span>') + `<p class="lead">Pour chaque élément, une seule question : <em>où est-ce que ça me sera utile ?</em></p><div class="btns" style="margin-bottom:6px"><button class="btn" data-act="triall">Trier pas à pas (${I.box.length})</button></div>` +
+  return hudm(`File d'attente ▸ <b>${z3(I.box.length)}</b> élément${I.box.length > 1 ? 's' : ''}`, '<span class="blink">● Tri requis</span>') + `<p class="lead">Pour chaque élément, une seule question : <em>c’est une tâche, une note ou un projet ?</em></p><div class="btns" style="margin-bottom:6px"><button class="btn" data-act="triall">Trier pas à pas (${I.box.length})</button></div>` +
     `<div class="list" style="margin-top:14px">${I.box.map(x => `<div class="row"><span class="gl">${dot(x.dom) || '<span class="dot" style="--c:var(--line)"></span>'}</span><span class="m"><span class="t clk" data-open="${esc(x.path)}" style="cursor:pointer;white-space:normal;font-family:var(--serif);font-size:16.5px">${esc(x.title)}</span>${x.body.trim() ? `<div class="doc" style="font-size:13.5px;color:var(--ink2);max-height:120px;overflow:hidden;margin-top:4px">${md(x.body)}</div>` : ''}<div class="btns" style="margin-top:8px"><button class="btn sm" data-classify="${esc(x.path)}" style="flex:0">Trier</button><button class="btn sm line" data-open="${esc(x.path)}" style="flex:0">Ouvrir</button></div></span><span class="r">${x.fm.cree ? frDate(x.fm.cree, { day: 'numeric', month: 'short' }) : ''}</span></div>`).join('')}</div>`;
 }
 
@@ -838,19 +838,16 @@ function oldProjects() {
 
 /* ---------- Notes (PARA) ---------- */
 function vNotes(I) {
-  const L = I.idx.filter(x => inS(x) && x.kind !== 'boite' && x.kind !== 'fil');
-  let h = domsHTML() + hudm(`Index ▸ <b>${z3(L.length)}</b> notes · <b>${z3(Object.keys(meta.files).length + meta.media.length)}</b> images`, meta.last ? `Màj ${new Date(meta.last).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}` : 'Local') + `<label class="search">${ico('search')}<input id="nq" value="${esc(nq)}" placeholder="Chercher dans toutes les notes…"></label>`;
+  const keep = I.idx.filter(x => inS(x) && (x.kind === 'ressource' || x.kind === 'autre')).sort((a, b) => b.stamp - a.stamp);
+  const J = I.idx.filter(x => x.kind === 'journal').sort((a, b) => b.title.localeCompare(a.title));
+  const A = I.idx.filter(x => x.kind === 'archive' && inS(x)).sort((a, b) => b.stamp - a.stamp);
+  let h = domsHTML() + hudm(`Carnet ▸ <b>${z3(keep.length)}</b> notes à garder`, meta.last ? `Màj ${new Date(meta.last).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}` : 'Local') + `<label class="search">${ico('search')}<input id="nq" value="${esc(nq)}" placeholder="Chercher partout (notes, projets, tâches)…"></label>`;
   if (nq.trim()) { const X = hits(nq).filter(x => x.kind !== 'fil'); return h + `<div class="list">${X.length ? X.map(noteRow).join('') : '<p class="empty">Rien trouvé.</p>'}</div>`; }
-  UI.open ||= {}; if (UI.open.ressource === undefined) UI.open.ressource = true;
-  h += `<p class="hint notes-hint">Ici, ce que tu veux <b>garder</b> : idées, infos, références. Les choses à <b>faire</b> sont dans « À faire ».</p>`;
-  const ORDER = ['ressource', 'domaine', 'projet', 'journal', 'archive'], LBL = { ressource: 'Idées & ressources', domaine: 'Domaines', projet: 'Notes de projets', journal: 'Journal', archive: 'Archives' };
-  for (const k of [...ORDER.map(id => ({ ...KIND(id), label: LBL[id] })), { id: 'autre', label: 'Autres', n: '·' }]) {
-    const X = L.filter(x => x.kind === k.id).sort(k.id === 'journal' ? (a, b) => b.title.localeCompare(a.title) : (a, b) => (a.sub || '').localeCompare(b.sub || '', 'fr') || byTitle(a, b));
-    if (!X.length && ['autre', 'journal'].includes(k.id)) continue;
-    let rows = '', cur = null;
-    for (const x of X) { if (x.sub !== cur) { cur = x.sub; if (cur) rows += `<div class="fold">${esc(cur)}</div>`; } rows += noteRow(x); }
-    h += `<details class="para" data-k="${k.id}" ${UI.open[k.id] ? 'open' : ''}><summary><span class="n">${k.n}</span><b>${k.label}</b><span class="c">${X.length}</span></summary><div class="list">${rows || '<p class="empty" style="padding:6px 2px 14px">Vide.</p>'}</div></details>`;
-  }
+  h += `<p class="hint notes-hint">Ce que tu veux <b>garder</b> : idées, recettes, liens, infos. Ce qui est à <b>faire</b> vit dans « À faire ».</p>`;
+  h += `<div class="list">${keep.length ? keep.map(noteRow).join('') : `<p class="empty">${sphere ? 'Aucune note ici.' : 'Aucune note pour l’instant.'}</p>`}</div>`;
+  UI.open ||= {};
+  const fold = (k, label, X) => X.length ? `<details class="para" data-k="${k}" ${UI.open[k] ? 'open' : ''}><summary><span class="n">${k === 'journal' ? 'J' : '4'}</span><b>${label}</b><span class="c">${X.length}</span></summary><div class="list">${X.map(noteRow).join('')}</div></details>` : '';
+  h += `<div style="margin-top:18px">${fold('journal', 'Journal', J)}${fold('archive', 'Archives', A)}</div>`;
   return h + `<div class="btns"><button class="btn line" data-act="newnote">＋ Nouvelle note</button></div>`;
 }
 function hits(q) {
@@ -977,16 +974,15 @@ function classify(path, chain = false) {
     <div class="fld"><label for="cT">Titre</label><input id="cT" value="${esc(x.title)}" style="font:600 17px var(--serif)"></div>
     ${x.body.trim() ? `<div class="doc" style="font-size:14px;max-height:26dvh;overflow:auto;border-left:2px solid var(--line);padding-left:12px;margin-bottom:12px">${md(x.body)}</div>` : ''}
     <span class="sub">Domaine</span>${domChips('cS', x.dom)}
-    <span class="sub" style="margin-top:14px">Où le ranger ?</span>
-    <div class="dest">
-      <button type="button" data-d="add"><b>Dans une note</b><small>Un projet ou un domaine existant</small></button>
-      <button type="button" data-d="projet"><b>Nouveau projet</b><small>Un objectif avec une fin</small></button>
-      <button type="button" data-d="ressource"><b>Ressource</b><small>À garder pour plus tard</small></button>
-      <button type="button" data-d="archive"><b>Archives</b><small>Plus utile, mais on garde</small></button>
+    <span class="sub" style="margin-top:14px">C’est…</span>
+    <div class="dest d3">
+      <button type="button" data-d="tache"><b>Une tâche</b><small>À faire</small></button>
+      <button type="button" data-d="ressource"><b>Une note</b><small>À garder</small></button>
+      <button type="button" data-d="projet"><b>Un projet</b><small>Plusieurs étapes</small></button>
     </div>
     <div id="cMore"></div>
     <div class="btns"><button class="btn bad" id="cDel">Supprimer</button>${chain ? '<button class="btn line" id="cSkip">Passer</button>' : ''}</div>`);
-  const getS = chipGroup(pan, 'cS');
+  const getS = chipGroup(pan, 'cS', d => { const sel = $('#tfTo', pan), p = domNote(d); if (sel && p) sel.value = p; });
   const title = () => cleanTitle($('#cT', pan).value) || x.title;
   const withDom = () => { const d = getS(); return build({ ...x.fm, domaine: d || undefined }, x.body, x.order); };
   const done = (msg, openPath) => {
@@ -999,6 +995,13 @@ function classify(path, chain = false) {
   $$('[data-d]', pan).forEach(b => b.onclick = () => {
     $$('[data-d]', pan).forEach(y => y.classList.toggle('on', y === b));
     const d = b.dataset.d, more = $('#cMore', pan);
+    if (d === 'tache') {
+      if (title() !== x.title) { saveNote(path, withDom()); path = moveNote(path, uniquePath(dirOf('boite'), title())); }
+      more.innerHTML = `<div style="margin-top:14px;padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--sheet)">${taskFormHTML(info(path), getS())}</div>`;
+      bindTaskForm(pan, path, msg => done(msg));
+      setTimeout(() => more.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 50);
+      return;
+    }
     if (d === 'add') {
       const opts = targetOptions();
       if (!opts) { more.innerHTML = `<p class="hint" style="margin-top:10px">Aucun projet ni domaine pour l’instant : choisis « Nouveau projet ».</p>`; return; }
@@ -1032,6 +1035,36 @@ function classify(path, chain = false) {
   if (chain) $('#cSkip', pan).onclick = () => { const L = buildIndex().box, i = L.findIndex(b => b.path === path), nb = L[(i + 1) % L.length]; if (nb && nb.path !== path) classify(nb.path, true); else closeLayer(); };
 }
 
+/* ---------- Transformer une note en tâche ---------- */
+const domNote = d => { const D = buildIndex().doms; return (D.find(n => n.title === d) || D.find(n => n.fm.domaine === d && d))?.path || ''; };
+function taskFormHTML(x, dom) {
+  const lines = x.body.split('\n').map(l => l.trim()).filter(Boolean), single = lines.length <= 1 && !/!\[\[|https?:|\[\[/.test(x.body);
+  const guess = lines.length === 1 && !TASK.test(lines[0]) && lines[0].length < 80 ? lines[0] : x.title;
+  const due = (/📅\s*(\d{4}-\d{2}-\d{2})/u.exec(x.body) || [])[1] || '';
+  return `<div class="tform"><div class="fld"><label for="tfT">La tâche</label><input id="tfT" value="${esc(guess.replace(/^[-*+] \[ \] ?/, ''))}"></div>
+    <div class="fld"><label for="tfTo">Rangée dans</label><select id="tfTo">${targetOptions(domNote(dom || x.dom))}</select></div>
+    <span class="sub">Échéance</span>${dueChips('tfDue', due)}
+    <label class="askchk" style="color:var(--ink2);margin-top:10px"><input type="checkbox" id="tfKeep" ${single ? '' : 'checked'}> Garder aussi la note (reliée à la tâche)</label>
+    <button class="btn block" id="tfGo" style="margin-top:8px">En faire une tâche</button></div>`;
+}
+function bindTaskForm(pan, path, after) {
+  const getDue = dueGroup(pan, 'tfDue');
+  $('#tfGo', pan).onclick = () => {
+    const x = info(path), to = $('#tfTo', pan).value, keep = $('#tfKeep', pan).checked;
+    let t = $('#tfT', pan).value.replace(/\s+/g, ' ').trim() || x.title;
+    if (!to) return toast('Choisis où ranger la tâche');
+    let np = null;
+    if (keep) { np = x.kind === 'ressource' ? path : moveNote(path, uniquePath(dirOf('ressource'), x.title)); t += ` — [[${titleOf(np)}]]`; }
+    appendTo(to, { text: t, task: true, due: getDue() });
+    if (!keep) deleteNote(path);
+    vibrate(); after(`Tâche ajoutée dans « ${titleOf(to)} »`);
+  };
+}
+function toTaskSheet(path) {
+  const x = info(path), pan = layer('En faire une tâche', taskFormHTML(x));
+  bindTaskForm(pan, path, msg => { toast(msg); closeLayer(() => render()); render(); });
+}
+
 /* ---------- Lire une note ---------- */
 function openNote(path) {
   if (!notes[path]) return toast('Note introuvable');
@@ -1052,7 +1085,7 @@ function openNote(path) {
     ${x.ask && x.fm.consigne ? `<div class="askbox"><span>◆ Consigne pour l’assistant</span>${esc(x.fm.consigne)}</div>` : ''}
     <div class="doc scan" id="nMd">${md(x.body, offset) || '<p class="empty">Note vide. Touche le crayon pour écrire.</p>'}</div>
     ${back.length ? lbl('Mentionnée dans') + `<div class="list">${back.map(noteRow).join('')}</div>` : ''}
-    <div class="btns" style="margin-top:26px">${x.kind === 'boite' ? '<button class="btn" id="nCl">Trier</button>' : ''}<button class="btn line" id="nMv">Déplacer</button><button class="btn line askbtn" id="nAsk">◆ ${x.ask ? 'Consigne' : 'Confier à l’assistant'}</button>
+    <div class="btns" style="margin-top:26px">${x.kind === 'boite' ? '<button class="btn" id="nCl">Trier</button>' : ''}${['ressource', 'autre', 'boite', 'journal'].includes(x.kind) ? '<button class="btn line" id="nTk">✓ En faire une tâche</button>' : ''}<button class="btn line" id="nMv">Déplacer</button><button class="btn line askbtn" id="nAsk">◆ ${x.ask ? 'Consigne' : 'Confier à l’assistant'}</button>
       ${isProj && x.fm.statut !== 'terminé' ? '<button class="btn line" id="nEnd">Projet terminé</button>' : ''}
       ${x.kind === 'archive' ? '<button class="btn line" id="nUn">Sortir des archives</button>' : x.kind !== 'boite' && !isProj ? '<button class="btn line" id="nArc">Archiver</button>' : ''}
       <button class="btn bad" id="nDel">Supprimer</button></div>
@@ -1071,6 +1104,7 @@ function openNote(path) {
   on('#nEd', () => editNote(path));
   on('#nCl', () => classify(path, false));
   on('#nMv', () => moveSheet(path));
+  on('#nTk', () => toTaskSheet(path));
   on('#nAsk', () => askSheet(path));
   on('#nEnd', () => { setFm(path, { statut: 'terminé', fini: today() }); const np = moveNote(path, uniquePath(dirOf('archive'), x.title)); vibrate(); toast('Bravo ! Projet rangé dans les archives'); render(); openNote(np); });
   on('#nArc', () => { const np = moveNote(path, uniquePath(dirOf('archive'), x.title)); toast('Archivé'); render(); openNote(np); });

@@ -121,3 +121,11 @@ Un automate GitHub Actions du dépôt privé (`.github/workflows/cerveau.yml`) t
 **Lien de connexion (variante).** Même chiffrement, mais dans un lien `…/cerveau/#connexion=…` au lieu d'un fichier publié. La partie après `#` n'est jamais envoyée à un serveur.
 
 En cas de nouveau jeton GitHub, réactiver le login (ou recréer le lien).
+
+## Trois sortes de choses
+
+- **Tâche** : une ligne à cocher, rangée dans son domaine (Perso, Salarié, PhantStudio) ou dans un projet. Pas besoin de créer un projet pour une seule action. Une tâche peut avoir des détails : on la touche pour ouvrir son fil, ou on la relie à une note.
+- **Projet** : seulement quand il y a plusieurs étapes et une fin.
+- **Note** : ce qu'on veut garder (idée, recette, lien, info).
+
+L'onglet Notes ne montre que les notes à garder (le plus récent en haut, filtre par domaine, recherche partout), avec le journal et les archives repliés. Projets et domaines vivent dans « À faire ». Le tri de la boîte pose une seule question : tâche, note ou projet ? Chaque note a un bouton « En faire une tâche ». Les dossiers PARA restent en place pour Obsidian.
