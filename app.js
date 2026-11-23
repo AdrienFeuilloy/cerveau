@@ -686,7 +686,7 @@ function shell() {
         <div class="acts"><button class="ib" data-act="sync" aria-label="Synchroniser"><span data-sync class="sync"></span></button><button class="ib" data-act="search" aria-label="Rechercher">${ico('search')}</button><button class="ib" data-act="settings" aria-label="Réglages">${ico('set')}</button></div>
       </header>
       <div id="view"></div>
-      <p class="foot">Cerveau · v2.0.0</p>
+      <p class="foot">Cerveau · v2.1.0</p>
     </div></main>
     <nav class="tabs">
       <button data-view="today">${ico('today')}Aujourd’hui</button><button data-view="afaire">${ico('task')}À faire</button>
@@ -874,7 +874,7 @@ function bindView() {
 }
 
 /* ---------- Clics communs ---------- */
-const ACTS = { settings: () => settings(), search: () => search(), journal: () => journal(), review: () => review(), newproj: () => newProject(), oldproj: () => oldProjects(), calguide: () => calGuide(), calhide: () => { UI.noCal = true; saveUI(); render(); }, calkey: () => settings('cal'), newnote: () => editNote(null), sync: () => ghReady() ? sync() : settings(), triall: () => { const b = buildIndex().box[0]; if (b) classify(b.path, true); } };
+const ACTS = { settings: () => settings(), search: () => search(), journal: () => journal(), review: () => review(), newproj: () => newProject(), oldproj: () => oldProjects(), calguide: () => calGuide(), loginlink: () => loginLinkSheet(), calhide: () => { UI.noCal = true; saveUI(); render(); }, calkey: () => settings('cal'), newnote: () => editNote(null), sync: () => ghReady() ? sync() : settings(), triall: () => { const b = buildIndex().box[0]; if (b) classify(b.path, true); } };
 document.addEventListener('click', e => {
   const wl = e.target.closest('[data-wl]'); if (wl) { e.preventDefault(); return openWiki(wl.dataset.wl); }
   if (e.target.closest('a[target]')) return;
@@ -1364,6 +1364,73 @@ async function makePushKeys(box) {
   $('#vkc', box).onclick = () => navigator.clipboard?.writeText(jwk.d).then(() => toast('Clé copiée'));
 }
 
+/* ==========================================================
+   Connexion simplifiée : identifiant + mot de passe
+   GitHub n'accepte plus le mot de passe GitHub pour les applis : on chiffre donc le jeton
+   (et la clé de l'agenda) avec TON identifiant + mot de passe, dans un lien de connexion.
+   Le lien ne contient que du chiffré (après #, jamais envoyé à un serveur). Nouvel appareil :
+   ouvrir le lien → identifiant + mot de passe → connecté (Cerveau et les applis de Quotidien).
+   ========================================================== */
+const ITER = 600000;
+const u64 = b => btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const d64 = s => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+async function loginKey(id, pw, salt) {
+  const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(id.trim().toLowerCase() + '|' + pw), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: ITER, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+}
+async function makeLoginLink(id, pw, withCal) {
+  const salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
+  const data = { o: cfg.owner, r: cfg.repo, b: cfg.branch, d: cfg.root, k: cfg.token, ...(withCal && cfg.calKey ? { c: cfg.calKey } : {}) };
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await loginKey(id, pw, salt), new TextEncoder().encode(JSON.stringify(data))));
+  const all = new Uint8Array(28 + ct.length); all.set(salt); all.set(iv, 16); all.set(ct, 28);
+  return `${location.origin}${location.pathname}#connexion=${u64(all)}`;
+}
+async function openLogin(blob) {
+  const pan = layer('Connexion', `${hudm('Accès ▸ dépôt privé', '<span class="blink">● Verrouillé</span>')}
+    <p class="lead" style="margin-top:8px">Ton identifiant et ton mot de passe <em>Cerveau</em> pour ouvrir tes notes sur cet appareil.</p>
+    <div class="fld"><label for="lgI">Identifiant</label><input id="lgI" autocomplete="username" autocapitalize="off"></div>
+    <div class="fld"><label for="lgP">Mot de passe</label><input id="lgP" type="password" autocomplete="current-password"></div>
+    <div class="btns"><button class="btn" id="lgOk">Se connecter</button></div><p class="hint" id="lgM"></p>`);
+  setTimeout(() => $('#lgI', pan).focus(), 150);
+  $('#lgP', pan).onkeydown = e => { if (e.key === 'Enter') $('#lgOk', pan).click(); };
+  $('#lgOk', pan).onclick = async () => {
+    const m = $('#lgM', pan), btn = $('#lgOk', pan); btn.disabled = true; m.textContent = 'Déchiffrement…';
+    try {
+      const all = d64(blob), key = await loginKey($('#lgI', pan).value, $('#lgP', pan).value, all.slice(0, 16));
+      const d = JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: all.slice(16, 28) }, key, all.slice(28))));
+      const changed = d.o !== cfg.owner || d.r !== cfg.repo || (d.d || '') !== cfg.root;
+      Object.assign(cfg, { owner: d.o, repo: d.r, branch: d.b || 'main', root: d.d || '', token: d.k, ...(d.c ? { calKey: d.c } : {}) }); saveCfg();
+      try { if (!JSON.parse(localStorage.getItem('hub.github') || '{}').token) localStorage.setItem('hub.github', JSON.stringify({ owner: d.o, repo: d.r, branch: d.b || 'main', token: d.k })); } catch { }
+      if (changed) { notes = {}; Object.assign(meta, { head: null, tree: null, treeSha: null, last: 0, deleted: {}, seeded: false }); persist(); }
+      history.replaceState(null, '', location.pathname); vibrate(); toast('Connecté ✓');
+      closeLayer(() => { render(); sync(); });
+    } catch { m.textContent = '✗ Identifiant ou mot de passe incorrect'; btn.disabled = false; }
+  };
+}
+function loginLinkSheet() {
+  if (!cfg.token) return toast('Relie d’abord ton dépôt dans les réglages');
+  const pan = layer('Lien de connexion', `<p class="hint" style="margin-top:0">Choisis un identifiant et un mot de passe <b>propres à Cerveau</b> (pas ceux de GitHub). Ils chiffrent ton accès dans un lien : sur un nouvel appareil, ouvre le lien puis saisis-les.</p>
+    <div class="fld"><label for="llI">Identifiant</label><input id="llI" autocomplete="username" autocapitalize="off" placeholder="ex. adrien"></div>
+    <div class="fld"><label for="llP">Mot de passe (10 caractères ou plus)</label><input id="llP" type="password" autocomplete="new-password"></div>
+    <div class="fld"><label for="llP2">Confirmer le mot de passe</label><input id="llP2" type="password" autocomplete="new-password"></div>
+    <label class="askchk" style="color:var(--ink2)"><input type="checkbox" id="llC" ${cfg.calKey ? 'checked' : 'disabled'}> Inclure la clé de l’agenda</label>
+    <div class="btns"><button class="btn" id="llOk">Créer le lien</button></div><div id="llOut"></div>`);
+  $('#llOk', pan).onclick = async () => {
+    const id = $('#llI', pan).value.trim(), pw = $('#llP', pan).value, out = $('#llOut', pan);
+    if (!id) return toast('Choisis un identifiant');
+    if (pw.length < 10) return toast('Mot de passe trop court (10 caractères minimum)');
+    if (pw !== $('#llP2', pan).value) return toast('Les deux mots de passe ne correspondent pas');
+    $('#llOk', pan).disabled = true; out.innerHTML = '<div class="spin"></div>';
+    const link = await makeLoginLink(id, pw, $('#llC', pan).checked);
+    out.innerHTML = `<div class="keybox" style="margin-top:12px"><span class="sub">Ton lien de connexion</span><code>${esc(link.slice(0, 70))}…</code>
+      <div class="btns"><button type="button" class="btn sm" id="llCp">Copier</button>${navigator.share ? '<button type="button" class="btn sm line" id="llSh">Partager</button>' : ''}</div>
+      <p class="hint">Garde-le dans un endroit sûr (gestionnaire de mots de passe, ou envoie-le toi-même par message). Sans ton identifiant et ton mot de passe, il est illisible.</p></div>`;
+    $('#llCp', pan).onclick = () => navigator.clipboard?.writeText(link).then(() => toast('Lien copié'));
+    if ($('#llSh', pan)) $('#llSh', pan).onclick = () => navigator.share({ title: 'Connexion Cerveau', url: link }).catch(() => { });
+    $('#llOk', pan).disabled = false;
+  };
+}
+
 function settings(focus) {
   const hubTok = (() => { try { return JSON.parse(localStorage.getItem('hub.github') || '{}').token || ''; } catch { return ''; } })();
   const f = (id, l, v, at = '') => `<div class="fld"><label for="${id}">${l}</label><input id="${id}" value="${esc(v)}" ${at}></div>`;
@@ -1374,6 +1441,9 @@ function settings(focus) {
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${f('sO', 'Propriétaire', cfg.owner, 'autocapitalize="off"')}${f('sR', 'Dépôt', cfg.repo, 'autocapitalize="off"')}</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${f('sB', 'Branche', cfg.branch, 'autocapitalize="off"')}${f('sD', 'Dossier (facultatif)', cfg.root, 'autocapitalize="off" placeholder="racine"')}</div>
     ${f('sK', 'Jeton (Contents : lecture et écriture)', cfg.token, 'type="password" autocomplete="off"')}
+    <span class="sub" style="margin-top:6px">Connexion sur un autre appareil</span>
+    <p class="hint" style="margin-top:0">Plus besoin de recopier le jeton : crée un lien protégé par un identifiant et un mot de passe.</p>
+    <div class="btns" style="margin:-2px 0 14px"><button type="button" class="btn line" data-act="loginlink">Créer mon lien de connexion</button></div>
     <span class="sub" style="margin-top:16px">Agenda Google</span>
     ${f('sC', 'Clé de l’agenda (reste sur cet appareil)', cfg.calKey || '', 'type="password" autocomplete="off" placeholder="la même que CAL_KEY dans GitHub"')}
     <button type="button" class="btn sm line" data-act="calguide" style="margin:-6px 0 12px">Comment relier mon agenda ?</button>
@@ -1492,7 +1562,8 @@ function splash() {
 }
 
 shell();
-const coldSplash = !['share', 'capture', 'text', 'url', 'title'].some(k => new URLSearchParams(location.search).has(k)) && !matchMedia('(prefers-reduced-motion: reduce)').matches && !sessionStorage.getItem('sc.splash');
+const loginBlob = (/^#connexion=([\w-]+)$/.exec(location.hash) || [])[1];
+const coldSplash = !loginBlob && !['share', 'capture', 'text', 'url', 'title'].some(k => new URLSearchParams(location.search).has(k)) && !matchMedia('(prefers-reduced-motion: reduce)').matches && !sessionStorage.getItem('sc.splash');
 if (coldSplash) { try { sessionStorage.setItem('sc.splash', '1'); } catch { } splash(); }
 render();
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) navigator.serviceWorker.register('./sw.js').then(r => r.update()).catch(() => { });
@@ -1507,4 +1578,5 @@ if (sp.has('share')) {
   history.replaceState(null, '', location.pathname);
   capture({ text });
 }
+if (loginBlob) openLogin(loginBlob);
 sync();

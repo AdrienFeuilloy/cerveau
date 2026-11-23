@@ -113,3 +113,7 @@ Un automate GitHub Actions du dépôt privé (`.github/workflows/cerveau.yml`) t
 2. il envoie les notifications (Web Push, clé `VAPID_PRIVATE`) aux appareils abonnés (`JSON_PUSH.json`) : rappels `⏰ AAAA-MM-JJ HH:MM` écrits dans une tâche, résumé du matin vers 8 h, rendez-vous qui commencent dans les 45 minutes.
 
 « ◆ Analyser » sur un rendez-vous crée une note dans la boîte, confiée à l'assistant : c'est le seul moment où un titre est écrit en clair.
+
+## Connexion sur un nouvel appareil
+
+Réglages → « Créer mon lien de connexion » : on choisit un identifiant et un mot de passe propres à Cerveau. Le jeton (et, si on veut, la clé de l'agenda) est chiffré avec eux (PBKDF2 600 000 itérations + AES-GCM) dans un lien `…/cerveau/#connexion=…`. La partie après `#` n'est jamais envoyée à un serveur. Sur le nouvel appareil : ouvrir le lien, saisir identifiant et mot de passe ; les applis de Quotidien (même domaine) reçoivent aussi le jeton si elles n'en ont pas.
