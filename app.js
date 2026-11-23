@@ -55,7 +55,7 @@ const ico = (n, size) => `<svg class="i" viewBox="0 0 24 24"${size ? ` style="wi
 /* ---------- Réglages (sur cet appareil) ---------- */
 const cfg = Object.assign({ owner: 'AdrienFeuilloy', repo: 'phant-studio-data', branch: 'main', token: '', root: 'Cerveau', theme: 'auto' }, read('config', {}) || {});
 // Même dépôt privé que les applis de Quotidien (même domaine GitHub Pages) : on reprend son jeton, rien à ressaisir
-if (!cfg.token) { try { const hub = JSON.parse(localStorage.getItem('hub.github') || '{}'); if (hub.token && (hub.repo || '').toLowerCase() === cfg.repo.toLowerCase() && (hub.owner || '').toLowerCase() === cfg.owner.toLowerCase()) { cfg.token = hub.token; cfg.branch = hub.branch || cfg.branch; } } catch { } }
+// Pas de reprise silencieuse du jeton de Quotidien : sur un nouvel appareil, on se connecte (identifiant + mot de passe).
 const saveCfg = () => write('config', cfg);
 const ghReady = () => !!(cfg.owner && cfg.repo && cfg.token);
 function applyTheme() {
@@ -711,7 +711,7 @@ function shell() {
         <div class="acts"><button class="ib" data-act="sync" aria-label="Synchroniser"><span data-sync class="sync"></span></button><button class="ib" data-act="search" aria-label="Rechercher">${ico('search')}</button><button class="ib" data-act="settings" aria-label="Réglages">${ico('set')}</button></div>
       </header>
       <div id="view"></div>
-      <p class="foot">Cerveau · v2.4.0</p>
+      <p class="foot">Cerveau · v2.4.1</p>
     </div></main>
     <nav class="tabs">
       <button data-view="today">${ico('today')}Aujourd’hui</button><button data-view="afaire">${ico('task')}À faire</button>
@@ -1599,7 +1599,8 @@ function settings(focus) {
   $('#sOut', pan).onclick = () => {
     if (!confirm(meta.dirty ? 'Des notes ne sont pas encore envoyées sur GitHub et seront perdues. Effacer quand même ?' : 'Effacer de cet appareil le jeton et toutes les notes ? Rien n’est effacé sur GitHub.')) return;
     Object.keys(localStorage).filter(k => k.startsWith(P)).forEach(k => localStorage.removeItem(k));
-    location.reload();
+    try { if (JSON.parse(localStorage.getItem('hub.github') || '{}').token && confirm('Déconnecter aussi les applis de Quotidien sur cet appareil ?')) localStorage.removeItem('hub.github'); } catch { }
+    sessionStorage.clear(); location.replace(location.pathname);
   };
 }
 
