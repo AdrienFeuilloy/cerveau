@@ -128,4 +128,4 @@ En cas de nouveau jeton GitHub, réactiver le login (ou recréer le lien).
 - **Projet** : seulement quand il y a plusieurs étapes et une fin.
 - **Note** : ce qu'on veut garder (idée, recette, lien, info).
 
-L'onglet Notes ne montre que les notes à garder (le plus récent en haut, filtre par domaine, recherche partout), avec le journal et les archives repliés. Projets et domaines vivent dans « À faire ». Le tri de la boîte pose une seule question : tâche, note ou projet ? Chaque note a un bouton « En faire une tâche ». Les dossiers PARA restent en place pour Obsidian.
+L'onglet Notes ne montre que les notes à garder (le plus récent en haut, filtre par domaine, recherche partout), avec le journal et les archives repliés. Projets et domaines vivent dans « À faire ». Le tri de la boîte pose une seule question : tâche, note ou projet ? Chaque note a un bouton « En faire une tâche ». Le crayon au bout de chaque tâche (ou un appui sur sa date) permet de changer son texte, sa date, ou de la supprimer avec son fil. Les dossiers PARA restent en place pour Obsidian.

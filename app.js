@@ -576,8 +576,33 @@ const lbl = (t, more = '', go = '', cls = '') => `<div class="lbl ${cls}"><b>${e
 const domsHTML = () => `<div class="doms" role="tablist">${[['', 'Tout'], ...SPHERES.map(s => [s.id, s.id])].map(([k, l]) => `<button class="${sphere === k ? 'on' : ''}" data-sph="${esc(k)}" style="--c:${k ? sc(k) : 'var(--ink)'}">${dot(k)}${esc(l)}</button>`).join('')}</div>`;
 function taskRow(t, ctx = true) {
   const i = TK.push(t) - 1, late = !t.done && t.due && t.due < today();
-  const bits = [t.due && !t.done ? `<span class="${late ? 'late' : ''}">${dueLabel(t.due)}</span>` : '', t.rem && !t.done ? `<span class="rem">⏰ ${t.rem.slice(11, 16).replace(':', 'h')}</span>` : '', t.done && t.doneAt ? `fait ${frDate(t.doneAt, { day: 'numeric', month: 'short' })}` : '', ctx ? esc(t.note.title) : ''].filter(Boolean);
-  return `<div class="row wrap ${t.done ? 'done' : ''}"><button class="ck" data-tk="${i}" aria-label="${t.done ? 'Rouvrir' : 'Cocher'}"></button><span class="m clk" data-th="${i}" style="cursor:pointer"><span class="t">${inline(t.text)}${t.id && threadCount(t.id) ? ` <span class="thb on">🧵 ${threadCount(t.id)}</span>` : ''}</span>${bits.length ? `<span class="s meta">${ctx && t.note.dom ? dot(t.note.dom) + ' ' : ''}${bits.join(' · ')}</span>` : ''}</span></div>`;
+  const bits = [t.due && !t.done ? `<span class="${late ? 'late' : ''} tdate" data-tmenu="${i}">${dueLabel(t.due)}</span>` : '', t.rem && !t.done ? `<span class="rem">⏰ ${t.rem.slice(11, 16).replace(':', 'h')}</span>` : '', t.done && t.doneAt ? `fait ${frDate(t.doneAt, { day: 'numeric', month: 'short' })}` : '', ctx ? esc(t.note.title) : ''].filter(Boolean);
+  return `<div class="row wrap ${t.done ? 'done' : ''}"><button class="ck" data-tk="${i}" aria-label="${t.done ? 'Rouvrir' : 'Cocher'}"></button><span class="m clk" data-th="${i}" style="cursor:pointer"><span class="t">${inline(t.text)}${t.id && threadCount(t.id) ? ` <span class="thb on">🧵 ${threadCount(t.id)}</span>` : ''}</span>${bits.length ? `<span class="s meta">${ctx && t.note.dom ? dot(t.note.dom) + ' ' : ''}${bits.join(' · ')}</span>` : ''}</span><button class="tmore" data-tmenu="${i}" aria-label="Modifier la tâche">${ico('edit', 15)}</button></div>`;
+}
+// Modifier une tâche : texte, échéance, ou la supprimer (avec son fil)
+function taskSheet(t) {
+  const pan = layer('Tâche', `<div class="fld"><label for="tsT">Tâche</label><input id="tsT" value="${esc(t.text)}"></div>
+    <span class="sub">Échéance</span>${dueChips('tsDue', t.due)}
+    <p class="hint">Dans « ${esc(t.note.title)} »</p>
+    <div class="btns"><button class="btn" id="tsOk">Enregistrer</button><button class="btn line" id="tsTh">🧵 Ouvrir le fil</button></div>
+    <div class="btns" style="margin-top:4px"><button class="btn bad" id="tsDel">Supprimer la tâche</button></div>`);
+  const getDue = dueGroup(pan, 'tsDue');
+  const locate = () => { const L = notes[t.path]?.text.split('\n') || [], i = L[t.line] === t.raw ? t.line : L.indexOf(t.raw); if (i < 0) toast('La tâche a changé, réessaie'); return [L, i]; };
+  $('#tsOk', pan).onclick = () => {
+    const [L, i] = locate(); if (i < 0) return;
+    const m = TASK.exec(L[i]), rest = m[3], txt = $('#tsT', pan).value.replace(/\s+/g, ' ').trim() || t.text, due = getDue();
+    const keep = [...rest.matchAll(/(⏰\s*\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}|[✅⏳🛫]\s*\d{4}-\d{2}-\d{2}|🆔\s*[\w-]+)/gu)].map(x => x[0]);
+    L[i] = `${m[1]}- [${m[2]}] ${txt}${due ? ' 📅 ' + due : ''}${keep.length ? ' ' + keep.join(' ') : ''}`;
+    saveNote(t.path, L.join('\n')); vibrate(); toast('Tâche modifiée'); closeLayer(() => render()); render();
+  };
+  $('#tsTh', pan).onclick = () => openThread(t.path, t.line, t.raw);
+  $('#tsDel', pan).onclick = () => {
+    const tp = t.id && threadPath(t.id);
+    if (!confirm(`Supprimer « ${plain(t.text)} »${tp ? ' et son fil' : ''} ?`)) return;
+    const [L, i] = locate(); if (i < 0) return;
+    L.splice(i, 1); saveNote(t.path, L.join('\n')); if (tp) deleteNote(tp);
+    toast('Tâche supprimée'); closeLayer(() => render()); render();
+  };
 }
 function projRow(p) {
   const ts = tasksOf(p), d = ts.filter(t => t.done).length, nx = ts.find(t => !t.done), pc = ts.length ? Math.round(d * 100 / ts.length) : 0;
@@ -686,7 +711,7 @@ function shell() {
         <div class="acts"><button class="ib" data-act="sync" aria-label="Synchroniser"><span data-sync class="sync"></span></button><button class="ib" data-act="search" aria-label="Rechercher">${ico('search')}</button><button class="ib" data-act="settings" aria-label="Réglages">${ico('set')}</button></div>
       </header>
       <div id="view"></div>
-      <p class="foot">Cerveau · v2.3.0</p>
+      <p class="foot">Cerveau · v2.4.0</p>
     </div></main>
     <nav class="tabs">
       <button data-view="today">${ico('today')}Aujourd’hui</button><button data-view="afaire">${ico('task')}À faire</button>
@@ -875,6 +900,7 @@ const ACTS = { settings: () => settings(), search: () => search(), journal: () =
 document.addEventListener('click', e => {
   const wl = e.target.closest('[data-wl]'); if (wl) { e.preventDefault(); return openWiki(wl.dataset.wl); }
   if (e.target.closest('a[target]')) return;
+  const tm = e.target.closest('[data-tmenu]'); if (tm) { const t = TK[+tm.dataset.tmenu]; if (t) taskSheet(t); return; }
   const th = e.target.closest('[data-th]'); if (th) { const t = TK[+th.dataset.th]; if (t) openThread(t.path, t.line, t.raw); return; }
   const tk = e.target.closest('[data-tk]'); if (tk) { const t = TK[+tk.dataset.tk]; if (t) { if (toggleLine(t.path, t.line, t.raw)) ping(tk); render(); } return; }
   const sp = e.target.closest('[data-sph]'); if (sp) { sphere = sp.dataset.sph; saveUI(); return render(); }

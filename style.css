@@ -580,3 +580,8 @@ html[data-theme="light"] .sp-glow{animation-name:spglowl}
 
 .dest.d3{grid-template-columns:1fr 1fr 1fr}
 .dest.d3 button{padding:11px 10px}
+
+.row.wrap{position:relative}
+.tmore{flex:0 0 auto;align-self:center;width:34px;height:34px;display:grid;place-items:center;border-radius:10px;color:var(--mut);opacity:.6}
+.tmore:hover,.tmore:active{opacity:1;background:var(--sheet)}
+.tdate{cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
