@@ -686,7 +686,7 @@ function shell() {
         <div class="acts"><button class="ib" data-act="sync" aria-label="Synchroniser"><span data-sync class="sync"></span></button><button class="ib" data-act="search" aria-label="Rechercher">${ico('search')}</button><button class="ib" data-act="settings" aria-label="Réglages">${ico('set')}</button></div>
       </header>
       <div id="view"></div>
-      <p class="foot">Cerveau · v2.1.0</p>
+      <p class="foot">Cerveau · v2.2.0</p>
     </div></main>
     <nav class="tabs">
       <button data-view="today">${ico('today')}Aujourd’hui</button><button data-view="afaire">${ico('task')}À faire</button>
@@ -756,7 +756,7 @@ function bootFX(root) {
 
 /* ---------- Aujourd'hui ---------- */
 function vToday(I, lateAll) {
-  if (!ghReady() && !Object.keys(notes).length) return `<p class="lead">Bienvenue. Pour retrouver tes notes sur le téléphone <em>et</em> l'ordinateur, relie Cerveau à ton dépôt GitHub privé (le même que Quotidien).</p><div class="btns"><button class="btn" data-act="settings">Relier mon dépôt</button></div>`;
+  if (!ghReady() && !Object.keys(notes).length) return `<p class="lead">Bienvenue. Pour retrouver tes notes sur le téléphone <em>et</em> l'ordinateur, connecte-toi.</p><div class="btns"><button class="btn" data-act="login">Se connecter</button><button class="btn line" data-act="settings">Réglages</button></div>`;
   if (ghReady() && !meta.last && !Object.keys(notes).length) return sstate === 'err' ? `<p class="lead">Impossible d'ouvrir le dépôt : ${esc(serr)}.</p><div class="btns"><button class="btn" data-act="settings">Vérifier les réglages</button></div>` : `<div class="spin"></div><p class="hint" style="text-align:center">Chargement de tes notes…</p>`;
   const T = I.tasks.filter(t => !t.done && inS2(t));
   const late = T.filter(t => t.due && t.due < today()).sort((a, b) => a.due.localeCompare(b.due)), tod = T.filter(t => t.due === today());
@@ -874,7 +874,7 @@ function bindView() {
 }
 
 /* ---------- Clics communs ---------- */
-const ACTS = { settings: () => settings(), search: () => search(), journal: () => journal(), review: () => review(), newproj: () => newProject(), oldproj: () => oldProjects(), calguide: () => calGuide(), loginlink: () => loginLinkSheet(), calhide: () => { UI.noCal = true; saveUI(); render(); }, calkey: () => settings('cal'), newnote: () => editNote(null), sync: () => ghReady() ? sync() : settings(), triall: () => { const b = buildIndex().box[0]; if (b) classify(b.path, true); } };
+const ACTS = { settings: () => settings(), search: () => search(), journal: () => journal(), review: () => review(), newproj: () => newProject(), oldproj: () => oldProjects(), calguide: () => calGuide(), loginlink: () => loginLinkSheet(), loginsetup: () => loginSetupSheet(), login: () => startLogin(), calhide: () => { UI.noCal = true; saveUI(); render(); }, calkey: () => settings('cal'), newnote: () => editNote(null), sync: () => ghReady() ? sync() : settings(), triall: () => { const b = buildIndex().box[0]; if (b) classify(b.path, true); } };
 document.addEventListener('click', e => {
   const wl = e.target.closest('[data-wl]'); if (wl) { e.preventDefault(); return openWiki(wl.dataset.wl); }
   if (e.target.closest('a[target]')) return;
@@ -1378,6 +1378,25 @@ async function loginKey(id, pw, salt) {
   const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(id.trim().toLowerCase() + '|' + pw), 'PBKDF2', false, ['deriveKey']);
   return crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: ITER, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
 }
+const APP_REPO = 'AdrienFeuilloy/cerveau', ACCES = 'acces.json';
+async function makeLoginBlob(id, pw, withCal) {
+  const salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
+  const data = { o: cfg.owner, r: cfg.repo, b: cfg.branch, d: cfg.root, k: cfg.token, ...(withCal && cfg.calKey ? { c: cfg.calKey } : {}) };
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await loginKey(id, pw, salt), new TextEncoder().encode(JSON.stringify(data))));
+  const all = new Uint8Array(28 + ct.length); all.set(salt); all.set(iv, 16); all.set(ct, 28);
+  return u64(all);
+}
+async function fetchAcces() {
+  try { const r = await fetch(`./${ACCES}?t=${Date.now()}`, { cache: 'no-store' }); if (!r.ok) return null; const j = await r.json(); return /^[\w-]{40,}$/.test(j.data || '') ? j.data : null; } catch { return null; }
+}
+/* Publie le chiffré dans le dépôt de l'appli (public) : le jeton doit avoir accès en écriture à ce dépôt. */
+async function publishAcces(blob) {
+  const url = `https://api.github.com/repos/${APP_REPO}/contents/${ACCES}`, H = { Authorization: 'Bearer ' + cfg.token, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' };
+  let sha; const g = await fetch(url, { headers: H, cache: 'no-store' }); if (g.ok) sha = (await g.json()).sha;
+  const body = { message: 'Accès chiffré', content: btoa(JSON.stringify({ v: 1, data: blob }) + '\n'), ...(sha ? { sha } : {}) };
+  const r = await fetch(url, { method: 'PUT', headers: { ...H, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (!r.ok) { const e = new Error('GitHub ' + r.status); e.status = r.status; throw e; }
+}
 async function makeLoginLink(id, pw, withCal) {
   const salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
   const data = { o: cfg.owner, r: cfg.repo, b: cfg.branch, d: cfg.root, k: cfg.token, ...(withCal && cfg.calKey ? { c: cfg.calKey } : {}) };
@@ -1402,10 +1421,41 @@ async function openLogin(blob) {
       Object.assign(cfg, { owner: d.o, repo: d.r, branch: d.b || 'main', root: d.d || '', token: d.k, ...(d.c ? { calKey: d.c } : {}) }); saveCfg();
       try { if (!JSON.parse(localStorage.getItem('hub.github') || '{}').token) localStorage.setItem('hub.github', JSON.stringify({ owner: d.o, repo: d.r, branch: d.b || 'main', token: d.k })); } catch { }
       if (changed) { notes = {}; Object.assign(meta, { head: null, tree: null, treeSha: null, last: 0, deleted: {}, seeded: false }); persist(); }
-      history.replaceState(null, '', location.pathname); vibrate(); toast('Connecté ✓');
+      if (location.hash) history.replaceState(null, '', location.pathname); vibrate(); toast('Connecté ✓');
       closeLayer(() => { render(); sync(); });
     } catch { m.textContent = '✗ Identifiant ou mot de passe incorrect'; btn.disabled = false; }
   };
+}
+function loginSetupSheet() {
+  if (!cfg.token) return toast('Relie d’abord ton dépôt dans les réglages');
+  const pan = layer('Activer le login', `<p class="hint" style="margin-top:0">Choisis un identifiant et un mot de passe <b>propres à Cerveau</b> (pas ceux de GitHub). Sur un nouvel appareil, il suffira d’ouvrir Cerveau et de les saisir.</p>
+    <div class="fld"><label for="laI">Identifiant</label><input id="laI" autocomplete="username" autocapitalize="off" placeholder="ex. adrien"></div>
+    <div class="fld"><label for="laP">Mot de passe (12 caractères ou plus)</label><input id="laP" type="password" autocomplete="new-password"></div>
+    <div class="fld"><label for="laP2">Confirmer le mot de passe</label><input id="laP2" type="password" autocomplete="new-password"></div>
+    <label class="askchk" style="color:var(--ink2)"><input type="checkbox" id="laC" ${cfg.calKey ? 'checked' : 'disabled'}> Inclure la clé de l’agenda</label>
+    <p class="hint">Seule une version chiffrée de ton accès est publiée avec l’appli. Un mot de passe long (une petite phrase, par exemple) la rend impossible à casser.</p>
+    <div class="btns"><button class="btn" id="laOk">Activer</button></div><p class="hint" id="laM"></p>`);
+  $('#laOk', pan).onclick = async () => {
+    const id = $('#laI', pan).value.trim(), pw = $('#laP', pan).value, m = $('#laM', pan), btn = $('#laOk', pan);
+    if (!id) return toast('Choisis un identifiant');
+    if (pw.length < 12) return toast('Mot de passe trop court (12 caractères minimum)');
+    if (pw !== $('#laP2', pan).value) return toast('Les deux mots de passe ne correspondent pas');
+    btn.disabled = true; m.textContent = 'Chiffrement…';
+    try {
+      await publishAcces(await makeLoginBlob(id, pw, $('#laC', pan).checked));
+      vibrate(); toast('Login activé ✓');
+      m.innerHTML = '✓ Activé. Sur un nouvel appareil, ouvre <b>adrienfeuilloy.github.io/cerveau</b> et connecte-toi (disponible d’ici une minute).';
+    } catch (e) {
+      btn.disabled = false;
+      m.innerHTML = e.status === 403 || e.status === 404
+        ? `✗ Ton jeton n’a pas accès au dépôt <b>cerveau</b>. Ajoute-le à ton jeton (<a href="https://github.com/settings/personal-access-tokens" target="_blank" rel="noopener">jetons GitHub</a> → ton jeton → Repository access : ajouter <b>cerveau</b>, Contents : lecture et écriture), puis réessaie.`
+        : '✗ Échec de la publication (' + esc(e.message) + '). Réessaie.';
+    }
+  };
+}
+async function startLogin() {
+  const blob = await fetchAcces();
+  if (blob) openLogin(blob); else settings();
 }
 function loginLinkSheet() {
   if (!cfg.token) return toast('Relie d’abord ton dépôt dans les réglages');
@@ -1442,8 +1492,8 @@ function settings(focus) {
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${f('sB', 'Branche', cfg.branch, 'autocapitalize="off"')}${f('sD', 'Dossier (facultatif)', cfg.root, 'autocapitalize="off" placeholder="racine"')}</div>
     ${f('sK', 'Jeton (Contents : lecture et écriture)', cfg.token, 'type="password" autocomplete="off"')}
     <span class="sub" style="margin-top:6px">Connexion sur un autre appareil</span>
-    <p class="hint" style="margin-top:0">Plus besoin de recopier le jeton : crée un lien protégé par un identifiant et un mot de passe.</p>
-    <div class="btns" style="margin:-2px 0 14px"><button type="button" class="btn line" data-act="loginlink">Créer mon lien de connexion</button></div>
+    <p class="hint" style="margin-top:0">Plus besoin de recopier le jeton : un identifiant et un mot de passe suffisent.</p>
+    <div class="btns" style="margin:-2px 0 14px"><button type="button" class="btn line" data-act="loginsetup">Activer le login</button><button type="button" class="btn sm line" data-act="loginlink">ou un lien</button></div>
     <span class="sub" style="margin-top:16px">Agenda Google</span>
     ${f('sC', 'Clé de l’agenda (reste sur cet appareil)', cfg.calKey || '', 'type="password" autocomplete="off" placeholder="la même que CAL_KEY dans GitHub"')}
     <button type="button" class="btn sm line" data-act="calguide" style="margin:-6px 0 12px">Comment relier mon agenda ?</button>
@@ -1579,4 +1629,8 @@ if (sp.has('share')) {
   capture({ text });
 }
 if (loginBlob) openLogin(loginBlob);
+else if (!ghReady()) fetchAcces().then(async b => {
+  while (document.querySelector('.splash')) await new Promise(r => setTimeout(r, 150));
+  if (b && !ghReady() && (!ov || ov.hidden)) openLogin(b);
+});
 sync();
