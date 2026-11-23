@@ -91,3 +91,25 @@ Dans un fil ou une note, des questions à remplir depuis l'appli :
 ```
 
 Les réponses s'écrivent sur la ligne `=>` (retours à la ligne notés ` ⏎ `). Le bouton « Réponses prêtes » confie la note à l'assistant.
+
+## Organisation de l'appli (v2)
+
+- **Aujourd'hui** : bloc d'état, pastilles des autres applis (menu de Violette, projets PhantStudio), agenda du jour, ce qui est à faire aujourd'hui, boîte à trier, projets en cours.
+- **À faire** : uniquement des actions à cocher, **par date** ou **par projet** (et domaines), plus l'historique des tâches faites.
+- **Boîte** : ce qui a été capturé et attend d'être trié.
+- **Notes** : ce qu'on garde (idées, ressources, domaines, notes de projets, journal, archives).
+
+## Liens avec les autres applis (même dépôt privé, lecture seule)
+
+- `JSON_VIOLETTE.json` : menu du jour de Violette.
+- `data.json` : projets PhantStudio en cours et heures de la semaine.
+- `JSON_AGENDA.json` : agenda Google (voir ci-dessous).
+
+## Agenda Google et notifications
+
+Un automate GitHub Actions du dépôt privé (`.github/workflows/cerveau.yml`) tourne toutes les 30 minutes de 6 h à 22 h :
+
+1. il lit l'adresse iCal secrète de l'agenda (secret `CAL_ICS_URL`), ne garde que **titre et heure** (jamais lieu, description ni invités), **chiffre les titres** (AES-GCM, clé `CAL_KEY`) et écrit `JSON_AGENDA.json` ; la même clé est saisie dans les réglages de l'appli, sur chaque appareil, pour déchiffrer ;
+2. il envoie les notifications (Web Push, clé `VAPID_PRIVATE`) aux appareils abonnés (`JSON_PUSH.json`) : rappels `⏰ AAAA-MM-JJ HH:MM` écrits dans une tâche, résumé du matin vers 8 h, rendez-vous qui commencent dans les 45 minutes.
+
+« ◆ Analyser » sur un rendez-vous crée une note dans la boîte, confiée à l'assistant : c'est le seul moment où un titre est écrit en clair.

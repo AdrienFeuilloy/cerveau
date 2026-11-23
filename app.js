@@ -26,7 +26,7 @@ const escRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const plural = (n, s, p = s + 's') => `${n} ${n > 1 ? p : s}`;
 const cap1 = s => s.charAt(0).toUpperCase() + s.slice(1);
 const dueLabel = iso => { const n = daysTo(iso); return n === 0 ? "aujourd'hui" : n === 1 ? 'demain' : n === -1 ? 'hier' : n < 0 ? `retard ${-n} j` : n < 7 ? new Date(iso + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long' }) : frDate(iso, { day: 'numeric', month: 'short' }); };
-const plain = s => String(s || '').replace(/\s*🆔\s*[\w-]+/gu, '').replace(/!\[\[[^\]]*\]\]|!\[[^\]]*\]\([^)]*\)/g, '📷').replace(/\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|([^\]]+))?\]\]/g, (m, a, b) => b || a).replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/[📅✅]\s*\d{4}-\d{2}-\d{2}/gu, '').replace(/[*`]/g, '').replace(/\s+/g, ' ').trim();
+const plain = s => String(s || '').replace(/\s*🆔\s*[\w-]+/gu, '').replace(/⏰\s*\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/gu, '').replace(/!\[\[[^\]]*\]\]|!\[[^\]]*\]\([^)]*\)/g, '📷').replace(/\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|([^\]]+))?\]\]/g, (m, a, b) => b || a).replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/[📅✅]\s*\d{4}-\d{2}-\d{2}/gu, '').replace(/[*`]/g, '').replace(/\s+/g, ' ').trim();
 const cleanTitle = s => String(s || '').replace(/[\\/:*?"<>|#^[\]]/g, ' ').replace(/^[.\s]+/, '').replace(/\s+/g, ' ').trim().slice(0, 80).trim();
 function ping(el) {
   const r = el.getBoundingClientRect(), x = r.left + r.width / 2 + 'px', y = r.top + r.height / 2 + 'px';
@@ -243,12 +243,40 @@ function hydrate(root) {
   });
 }
 
+/* ---------- Ce que les autres applis rangent dans le même dépôt : lu, jamais modifié ----------
+   JSON_VIOLETTE.json : menu de la semaine · data.json : projets PhantStudio · JSON_AGENDA.json : agenda (titres chiffrés)
+   Seul le strict nécessaire est gardé sur l'appareil (pas d'adresses, pas de montants). */
+const EXT_FILES = ['JSON_VIOLETTE.json', 'data.json', 'JSON_AGENDA.json'];
+const VIOLETTE_URL = 'https://adrienfeuilloy.github.io/Violette-app/violette.html', PHANT_URL = 'https://adrienfeuilloy.github.io/phant-studio-app/';
+let ext = read('ext', {}) || {};
+function slimExt(f, d) {
+  if (f === 'JSON_VIOLETTE.json') return { plans: d.weeklyMealPlans || {}, meals: d.settings?.meals || {} };
+  if (f === 'data.json') return {
+    clients: (d.clients || []).map(c => ({ id: c.id, n: [c.firstname, c.lastname].filter(Boolean).join(' '), co: c.company || '' })),
+    projects: (d.projects || []).map(p => ({ id: p.id, name: p.name, clientId: p.clientId, status: p.status || '', deadline: p.deadline || '' })),
+    sessions: (d.sessions || []).filter(x => x.date >= addDays(today(), -40)).map(x => ({ p: x.projectId, d: x.date, s: x.durationSeconds || 0 })),
+  };
+  if (f === 'JSON_AGENDA.json') return { salt: d.salt, iter: d.iter, events: d.events || [], at: d.updatedAt || '' };
+  return null;
+}
+async function pullExt(shas) {
+  let changed = false;
+  for (const f of EXT_FILES) {
+    const sha = shas[f];
+    if (!sha) { if (ext[f]) { delete ext[f]; changed = true; } continue; }
+    if (ext[f]?.sha === sha) continue;
+    try { const j = await gh(`/git/blobs/${sha}`); ext[f] = { sha, d: slimExt(f, JSON.parse(b64d(j.content))) }; changed = true; if (f === 'JSON_AGENDA.json') calPlain = {}; }
+    catch (e) { console.warn('lecture', f, e); }
+  }
+  if (changed) write('ext', ext);
+}
+
 async function remoteTree(commitSha) {
   const c = await gh(`/git/commits/${commitSha}`);
   const t = await gh(`/git/trees/${c.tree.sha}?recursive=1`);
-  const map = {}, files = {};
-  for (const e of t.tree || []) if (e.type === 'blob') { if (isNotePath(e.path)) map[e.path] = e.sha; else if (isMedia(e.path)) files[e.path] = e.sha; }
-  return { map, files, treeSha: c.tree.sha };
+  const map = {}, files = {}, ext = {};
+  for (const e of t.tree || []) if (e.type === 'blob') { if (isNotePath(e.path)) map[e.path] = e.sha; else if (isMedia(e.path)) files[e.path] = e.sha; else if (EXT_FILES.includes(e.path)) ext[e.path] = e.sha; }
+  return { map, files, ext, treeSha: c.tree.sha };
 }
 async function fetchBlobs(list) {
   const out = {}; let i = 0;
@@ -305,7 +333,7 @@ async function sync() {
       const head = ref.object.sha;
       let remote, treeSha;
       if (head === meta.head && meta.tree && meta.treeSha) { remote = { ...meta.tree }; treeSha = meta.treeSha; }
-      else { let files; ({ map: remote, files, treeSha } = await remoteTree(head)); meta.files = files; }
+      else { let files, extShas; ({ map: remote, files, ext: extShas, treeSha } = await remoteTree(head)); meta.files = files; await pullExt(extShas); }
       await pull(remote);
       if (!meta.seeded) { if (!Object.keys(remote).length && !Object.keys(notes).some(isNotePath)) seed(); meta.seeded = true; }
       const ch = [];
@@ -401,9 +429,10 @@ function tasksOf(x) {
   notes[x.path].text.split('\n').forEach((l, i) => {
     const m = TASK.exec(l); if (!m) return;
     const rest = m[3], due = (/📅\s*(\d{4}-\d{2}-\d{2})/u.exec(rest) || [])[1] || '', doneAt = (/✅\s*(\d{4}-\d{2}-\d{2})/u.exec(rest) || [])[1] || '';
-    const text = rest.replace(/[📅✅⏳🛫]\s*\d{4}-\d{2}-\d{2}/gu, '').replace(/🆔\s*[\w-]+/gu, '').replace(/\s+/g, ' ').trim();
+    const rem = (/⏰\s*(\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2})/u.exec(rest) || [])[1] || '';
+    const text = rest.replace(/⏰\s*\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/gu, '').replace(/[📅✅⏳🛫]\s*\d{4}-\d{2}-\d{2}/gu, '').replace(/🆔\s*[\w-]+/gu, '').replace(/\s+/g, ' ').trim();
     const id = (/🆔\s*([\w-]+)/u.exec(rest) || [])[1] || '';
-    if (text) out.push({ path: x.path, line: i, raw: l, done: m[2] !== ' ', text, due, doneAt, note: x, id });
+    if (text) out.push({ path: x.path, line: i, raw: l, done: m[2] !== ' ', text, due, doneAt, note: x, id, rem });
   });
   return out;
 }
@@ -459,6 +488,7 @@ function inline(s) {
   let t = esc(s); const codes = [];
   t = t.replace(/`([^`]+)`/g, (m, c) => `\u0000${codes.push(c) - 1}\u0000`)
     .replace(/\s*🆔\s*[\w-]+/gu, '')
+    .replace(/⏰\s*(\d{4}-\d{2}-\d{2})[ T](\d{2}):(\d{2})/gu, (m, d, h, mi) => `<span class="due rem">⏰ ${d === today() ? '' : frDate(d, { day: 'numeric', month: 'short' }) + ' '}${h}h${mi}</span>`)
     .replace(/!\[\[([^\]|]+)(?:\|[^\]]*)?\]\]/g, (m, a) => isImgName(unesc(a)) ? `<img class="att" data-att="${a.trim()}" alt="">` : m)
     .replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (m, alt, u) => /^https?:/.test(unesc(u)) ? `<img class="att" src="${u}" alt="${alt}">` : `<img class="att" data-att="${(() => { try { return decodeURIComponent(unesc(u)); } catch { return unesc(u); } })().split('/').pop()}" alt="${alt}">`)
     .replace(/\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|([^\]]+))?\]\]/g, (m, a, b) => `<a href="#" data-wl="${a.trim()}" class="${findByTitle(unesc(a.trim())) ? '' : 'miss'}">${b || a}</a>`)
@@ -532,10 +562,12 @@ function toast(msg) {
    Écrans
    ========================================================== */
 const UI = read('ui', {}) || {};
-const VIEWS = { today: "Aujourd'hui", boite: 'Boîte de réception', projets: 'Projets', taches: 'Tâches', notes: 'Notes' };
-let view = VIEWS[UI.view] ? UI.view : 'today';
+// Trois mondes bien séparés : ce qui est à FAIRE (cases à cocher), ce qui est à TRIER (boîte), ce qui est à GARDER (notes)
+const VIEWS = { today: "Aujourd'hui", afaire: 'À faire', boite: 'Boîte', notes: 'Notes' };
+const ALIAS = { taches: ['afaire', 'date'], projets: ['afaire', 'projet'] };
+let view = VIEWS[UI.view] ? UI.view : 'today', todoMode = UI.todoMode || 'date';
 let sphere = UI.sphere || '', projFilter = 'actif', showDone = false, nq = '';
-const saveUI = () => { UI.view = view; UI.sphere = sphere; write('ui', UI); };
+const saveUI = () => { UI.view = view; UI.sphere = sphere; UI.todoMode = todoMode; write('ui', UI); };
 const inS = x => !sphere || x.dom === sphere;
 const inS2 = t => inS(t.note);
 let TK = [];
@@ -544,7 +576,7 @@ const lbl = (t, more = '', go = '', cls = '') => `<div class="lbl ${cls}"><b>${e
 const domsHTML = () => `<div class="doms" role="tablist">${[['', 'Tout'], ...SPHERES.map(s => [s.id, s.id])].map(([k, l]) => `<button class="${sphere === k ? 'on' : ''}" data-sph="${esc(k)}" style="--c:${k ? sc(k) : 'var(--ink)'}">${dot(k)}${esc(l)}</button>`).join('')}</div>`;
 function taskRow(t, ctx = true) {
   const i = TK.push(t) - 1, late = !t.done && t.due && t.due < today();
-  const bits = [t.due && !t.done ? `<span class="${late ? 'late' : ''}">${dueLabel(t.due)}</span>` : '', t.done && t.doneAt ? `fait ${frDate(t.doneAt, { day: 'numeric', month: 'short' })}` : '', ctx ? esc(t.note.title) : ''].filter(Boolean);
+  const bits = [t.due && !t.done ? `<span class="${late ? 'late' : ''}">${dueLabel(t.due)}</span>` : '', t.rem && !t.done ? `<span class="rem">⏰ ${t.rem.slice(11, 16).replace(':', 'h')}</span>` : '', t.done && t.doneAt ? `fait ${frDate(t.doneAt, { day: 'numeric', month: 'short' })}` : '', ctx ? esc(t.note.title) : ''].filter(Boolean);
   return `<div class="row wrap ${t.done ? 'done' : ''}"><button class="ck" data-tk="${i}" aria-label="${t.done ? 'Rouvrir' : 'Cocher'}"></button><span class="m clk" data-th="${i}" style="cursor:pointer"><span class="t">${inline(t.text)}${t.id && threadCount(t.id) ? ` <span class="thb on">🧵 ${threadCount(t.id)}</span>` : ''}</span>${bits.length ? `<span class="s meta">${ctx && t.note.dom ? dot(t.note.dom) + ' ' : ''}${bits.join(' · ')}</span>` : ''}</span></div>`;
 }
 function projRow(p) {
@@ -560,6 +592,74 @@ function hudX(I) {
   return `<div class="hud-x">${g.map(d => `<div class="gg" style="--c:${sc(d.id)}"><svg viewBox="0 0 36 36"><circle class="tr" cx="18" cy="18" r="14"/><circle class="v" cx="18" cy="18" r="14" pathLength="100" style="stroke-dasharray:${d.pc} 100"/></svg><span><b>${String(d.op).padStart(3, '0')}</b>${esc(d.id)}</span></div>`).join('')}
     <div class="tick"><span style="animation-duration:${Math.max(14, txt.length * .22).toFixed(1)}s">${esc(txt)}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;${esc(txt)}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></div></div>`;
 }
+// Pastilles « Aujourd'hui chez toi » : le menu de Violette et l'activité PhantStudio, lus dans les autres applis
+function todayPills() {
+  const out = [], wd = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][new Date().getDay()];
+  const v = ext['JSON_VIOLETTE.json']?.d;
+  if (v && (!sphere || sphere === 'Perso')) {
+    const p = v.plans[wd] || {}, LB = { breakfast: 'Matin', lunch: 'Midi', snack: 'Goûter', dinner: 'Soir', fresh: 'Frais' };
+    const parts = Object.keys(LB).filter(k => (p[k] || []).length).map(k => `<span class="vm"><i>${LB[k]}</i>${esc(p[k].map(x => x.name).join(', '))}</span>`);
+    out.push(`<a class="pill vio" href="${VIOLETTE_URL}" target="_blank" rel="noopener"><span class="pl-h"><span class="pl-dot"></span>Violette mange aujourd’hui<span class="pl-go">›</span></span><span class="pl-b">${parts.join('') || '<span class="vm">Pas de menu prévu</span>'}</span></a>`);
+  }
+  const ph = ext['data.json']?.d;
+  if (ph && (!sphere || sphere === 'PhantStudio')) {
+    const cur = ph.projects.filter(p => /cours/i.test(p.status)), cl = id => ph.clients.find(c => c.id === id);
+    const wk0 = addDays(today(), -((new Date().getDay() + 6) % 7)), hrs = ph.sessions.filter(x => x.d >= wk0).reduce((a, x) => a + x.s, 0) / 3600;
+    out.push(`<a class="pill pha" href="${PHANT_URL}" target="_blank" rel="noopener"><span class="pl-h"><span class="pl-dot"></span>PhantStudio · ${plural(cur.length, 'projet')} en cours<span class="pl-go">›</span></span><span class="pl-b">${cur.slice(0, 4).map(p => { const c = cl(p.clientId); return `<span class="vm"><i>${esc(c?.co || c?.n || 'Client')}</i>${esc(p.name)}${isISO(p.deadline) ? ` · ${frDate(p.deadline, { day: 'numeric', month: 'short' })}` : ''}</span>`; }).join('') || '<span class="vm">Aucun projet en cours</span>'}<span class="vm"><i>Cette semaine</i>${hrs.toFixed(1).replace('.', ',').replace(',0', '')} h</span></span></a>`);
+  }
+  return out.length ? `<div class="pills">${out.join('')}</div>` : '';
+}
+
+/* ---------- Agenda Google : titres chiffrés dans le dépôt, déchiffrés seulement sur tes appareils ---------- */
+let calPlain = {}, calBusy = false;
+async function calKeyFor(salt, iter) {
+  const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(cfg.calKey), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({ name: 'PBKDF2', salt: Uint8Array.from(atob(salt), c => c.charCodeAt(0)), iterations: iter, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+}
+async function decryptAgenda() {
+  const a = ext['JSON_AGENDA.json']?.d; if (!a || !cfg.calKey || calBusy) return;
+  const todo = a.events.filter(e => !(e.id in calPlain) && e.s.slice(0, 10) >= addDays(today(), -1) && e.s.slice(0, 10) <= addDays(today(), 7)); if (!todo.length) return;
+  calBusy = true;
+  try {
+    const key = await calKeyFor(a.salt, a.iter);
+    for (const e of todo) {
+      try { const raw = Uint8Array.from(atob(e.t), c => c.charCodeAt(0)); calPlain[e.id] = new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: raw.slice(0, 12) }, key, raw.slice(12))); }
+      catch { calPlain[e.id] = null; }
+    }
+  } finally { calBusy = false; }
+  render();
+}
+const evTime = e => e.ad ? '<span class="evad">Journée</span>' : e.s.slice(11, 16).replace(':', 'h');
+function agendaHTML() {
+  const a = ext['JSON_AGENDA.json']?.d;
+  if (!a) return UI.noCal ? '' : `<div class="calset"><span>${ico('today', 16)} Relie ton agenda Google : tes rendez-vous du jour apparaîtront ici, titres chiffrés.</span><button class="btn sm line" data-act="calguide">Voir comment</button><button class="ib" data-act="calhide" aria-label="Masquer">${ico('x')}</button></div>`;
+  const evs = a.events.filter(e => e.s.slice(0, 10) === today() || (e.ad && e.s <= today() && (e.e || e.s) > today())).sort((x, y) => (x.ad ? '0' : x.s).localeCompare(y.ad ? '0' : y.s));
+  const tomorrow = a.events.filter(e => e.s.slice(0, 10) === addDays(today(), 1)).length;
+  if (cfg.calKey) decryptAgenda();
+  const now = new Date().toTimeString().slice(0, 5);
+  const row = e => { const t = cfg.calKey ? calPlain[e.id] : undefined, past = !e.ad && (e.e || e.s).slice(11, 16) < now;
+    return `<div class="row ev ${past ? 'past' : ''}"><span class="evt">${evTime(e)}${!e.ad && e.e ? `<small>${e.e.slice(11, 16).replace(':', 'h')}</small>` : ''}</span><span class="m"><span class="t">${t ? esc(t) : t === null ? '<span class="lock">🔒 Clé de l’agenda incorrecte</span>' : `<span class="lock">🔒 ${cfg.calKey ? 'déchiffrement…' : 'Titre chiffré'}</span>`}</span></span>${t ? `<button class="btn sm line askbtn" data-cal="${esc(e.id)}">◆ Analyser</button>` : ''}</div>`; };
+  return lbl(`Agenda du jour${evs.length ? ' · ' + evs.length : ''}`, cfg.calKey ? '' : 'Saisir la clé', 'calkey') + `<div class="list">${evs.length ? evs.map(row).join('') : '<p class="empty">Aucun rendez-vous aujourd’hui.</p>'}</div>${tomorrow ? `<p class="hint cal-tm">Demain : ${plural(tomorrow, 'rendez-vous', 'rendez-vous')}</p>` : ''}`;
+}
+// « Analyser » : c'est toi qui décides de me montrer ce rendez-vous. Il part dans la boîte, confié à l'assistant.
+function analyseEvent(id) {
+  const e = ext['JSON_AGENDA.json']?.d.events.find(x => x.id === id), t = calPlain[id]; if (!e || !t) return;
+  const when = e.ad ? `le ${frDate(e.s.slice(0, 10), { weekday: 'long', day: 'numeric', month: 'long' })} (journée)` : `le ${frDate(e.s.slice(0, 10), { weekday: 'long', day: 'numeric', month: 'long' })} de ${e.s.slice(11, 16)} à ${(e.e || e.s).slice(11, 16)}`;
+  const p = createNote(uniquePath(dirOf('boite'), 'Préparer · ' + t.slice(0, 60)), build({ cree: today(), assistant: 'à traiter', consigne: 'Prépare ce rendez-vous : fais les liens avec mes notes et fais-moi un petit résumé avant', demande: today(), rdv: e.s.replace('T', ' ') }, `Rendez-vous : **${t}**\n${cap1(when)}.\n`));
+  toast('Confié à l’assistant ◆'); vibrate(); render(); openNote(p);
+}
+function calGuide() {
+  layer('Relier Google Agenda', `<p class="lead" style="margin-top:0">Tes rendez-vous arrivent dans Cerveau <em>titre et heure seulement</em> : ni lieu, ni description, ni invités.</p>
+    <ol class="guide">
+      <li><b>Copie l’adresse secrète de ton agenda.</b> Sur ordinateur : Google Agenda → ⚙ Paramètres → ton agenda à gauche → « Intégrer l’agenda » → <b>Adresse secrète au format iCal</b> → copier.</li>
+      <li><b>Choisis une clé</b> : une phrase que toi seul connais (ex. trois mots). Elle sert à chiffrer les titres.</li>
+      <li><b>Range les deux dans GitHub</b> (dépôt privé → Settings → Secrets and variables → Actions → New repository secret) : <code>CAL_ICS_URL</code> = l’adresse, <code>CAL_KEY</code> = la clé.</li>
+      <li><b>Saisis la même clé ici</b>, dans les réglages de Cerveau, sur chaque appareil.</li>
+    </ol>
+    <p class="hint">Toutes les 30 minutes (de 6 h à 22 h), GitHub lit ton agenda, garde titre et heure, chiffre les titres et les range dans ton dépôt. Sans la clé, personne ne peut les lire, moi compris. Tu choisis ce que tu me montres avec « Analyser ».</p>
+    <div class="btns"><button class="btn" data-act="calkey">Saisir la clé</button></div>`);
+}
+
 // Mini bloc d'instruments en tête de chaque écran (touche HUD)
 const z3 = n => String(n).padStart(3, '0');
 const ring = () => `<svg class="mr" viewBox="0 0 20 20" aria-hidden="true"><circle class="a" cx="10" cy="10" r="8.5"/><circle class="b" cx="10" cy="10" r="5"/><circle class="d" cx="10" cy="10" r="1.6"/></svg>`;
@@ -572,7 +672,7 @@ function shell() {
     <aside class="side">
       <div class="brand">${ring()}Cerveau</div><div class="kick">Second cerveau · PARA</div>
       <button class="btn capb" data-cap>${ico('plus', 18)} Capturer <span style="margin-left:auto;font:500 11px var(--mono);opacity:.6">N</span></button>
-      ${['today', 'boite', 'projets', 'taches', 'notes'].map(v => `<button class="nav" data-view="${v}">${ico({ today: 'today', boite: 'inbox', projets: 'proj', taches: 'task', notes: 'notes' }[v], 18)}${VIEWS[v]}<span class="c" data-count="${v}"></span></button>`).join('')}
+      ${['today', 'afaire', 'boite', 'notes'].map(v => `<button class="nav" data-view="${v}">${ico({ today: 'today', boite: 'inbox', afaire: 'task', notes: 'notes' }[v], 18)}${VIEWS[v]}<span class="c" data-count="${v}"></span></button>`).join('')}
       <div class="sep">Domaines</div>
       <div id="sideDoms"></div>
       <div class="sep">Outils</div>
@@ -583,15 +683,15 @@ function shell() {
     </aside>
     <main class="main"><div class="col">
       <header class="top"><div class="tt"><div class="kick" id="kick"></div><h1 id="ttl"></h1></div>
-        <div class="acts"><button class="ib" data-act="sync" aria-label="Synchroniser"><span data-sync class="sync"></span></button><button class="ib" data-view="boite" aria-label="Boîte">${ico('inbox')}<span class="bdg" id="bdg" hidden></span></button><button class="ib" data-act="search" aria-label="Rechercher">${ico('search')}</button><button class="ib" data-act="settings" aria-label="Réglages">${ico('set')}</button></div>
+        <div class="acts"><button class="ib" data-act="sync" aria-label="Synchroniser"><span data-sync class="sync"></span></button><button class="ib" data-act="search" aria-label="Rechercher">${ico('search')}</button><button class="ib" data-act="settings" aria-label="Réglages">${ico('set')}</button></div>
       </header>
       <div id="view"></div>
-      <p class="foot">Cerveau · v1.8.0</p>
+      <p class="foot">Cerveau · v2.0.0</p>
     </div></main>
     <nav class="tabs">
-      <button data-view="today">${ico('today')}Aujourd’hui</button><button data-view="projets">${ico('proj')}Projets</button>
+      <button data-view="today">${ico('today')}Aujourd’hui</button><button data-view="afaire">${ico('task')}À faire</button>
       <button class="cap" data-cap aria-label="Capturer">${ico('plus')}</button>
-      <button data-view="taches">${ico('task')}Tâches</button><button data-view="notes">${ico('notes')}Notes</button>
+      <button data-view="boite">${ico('inbox')}Boîte<span class="bdg" id="bdg" hidden></span></button><button data-view="notes">${ico('notes')}Notes</button>
     </nav></div>`;
   const top = $('.top');
   addEventListener('scroll', () => top.classList.toggle('stuck', scrollY > 8), { passive: true });
@@ -604,15 +704,15 @@ function render() {
   $('#kick').textContent = view === 'today' ? frDate(today(), { weekday: 'long', day: 'numeric', month: 'long' }) : (sphere || 'Tous les domaines');
   $('#ttl').textContent = view === 'today' ? (new Date().getHours() < 18 && new Date().getHours() >= 5 ? 'Bonjour.' : 'Bonsoir.') : VIEWS[view];
   const bdg = $('#bdg'); bdg.hidden = !I.box.length; bdg.textContent = I.box.length;
-  const counts = { boite: I.box.length, projets: I.projs.filter(p => (p.fm.statut || 'actif') === 'actif' && inS(p)).length, taches: I.tasks.filter(t => !t.done && t.due && t.due <= today() && inS2(t)).length || '', notes: I.idx.filter(inS).length };
+  const counts = { boite: I.box.length || '', afaire: I.tasks.filter(t => !t.done && t.due && t.due <= today() && inS2(t)).length || '', notes: I.idx.filter(x => inS(x) && x.kind !== 'fil').length };
   $$('[data-count]').forEach(el => el.textContent = counts[el.dataset.count] ?? '');
   $('#sideDoms').innerHTML = [['', 'Tout'], ...SPHERES.map(s => [s.id, s.id])].map(([k, l]) => `<button class="nav ${sphere === k ? 'on' : ''}" data-sph="${esc(k)}">${k ? dot(k) : '<span class="dot" style="--c:var(--ink)"></span>'}${esc(l)}</button>`).join('');
   $$('[data-view]').forEach(b => b.classList.toggle('on', b.dataset.view === view));
-  const html = { today: vToday, projets: vProjets, taches: vTaches, notes: vNotes, boite: vBoite }[view](I, late), vw = $('#view');
+  const html = { today: vToday, afaire: vAFaire, notes: vNotes, boite: vBoite }[view](I, late), vw = $('#view');
   if (html !== lastHTML) { vw.innerHTML = html; lastHTML = html; bindView(); hydrate(vw); }
   const clk = new Date().toLocaleTimeString('fr-FR'); $$('[data-clock]').forEach(c => c.textContent = clk);
   if (!splashing && boot && meta.last) { boot = false; bootFX($('#view')); }
-  if (!splashing && view === 'today' && !typed && meta.last) typeLead();
+  if (!splashing && view === 'today' && !typingDone && meta.last && !$('.lead')?.dataset.t) typeLead(); // relance si l'écran a été redessiné en pleine frappe
   paint(sstate, serr);
   document.title = (I.box.length ? `(${I.box.length}) ` : '') + 'Cerveau';
 }
@@ -620,7 +720,7 @@ function render() {
 let typed = false;
 function typeLead() {
   const el = $('.lead'); if (!el || matchMedia('(prefers-reduced-motion: reduce)').matches) { typed = typingDone = true; el?.classList.remove('wait'); return; }
-  typed = true;
+  const again = typed; typed = true; el.dataset.t = '1';
   const full = el.innerHTML, pr = $('.pr', el).outerHTML, txt = el.textContent.replace(/^›/, '');
   let i = 0; el.classList.add('typing'); el.classList.remove('wait'); el.innerHTML = pr + '<span class="caret"></span>';
   const step = () => {
@@ -629,9 +729,9 @@ function typeLead() {
     if (i < txt.length) setTimeout(step, txt[i - 1] === ' ' ? 55 : 32 + Math.random() * 30);
     else { el.innerHTML = full + '<span class="caret"></span>'; setTimeout(() => { el.classList.add('glx'); setTimeout(() => { el.classList.remove('typing'); }, 220); setTimeout(() => { el.classList.remove('glx'); $('.caret', el)?.classList.add('off'); typingDone = true; }, 650); }, 1400); }
   };
-  setTimeout(step, 1100); // après la séquence d’allumage du HUD
+  setTimeout(step, again ? 0 : 1100); // après la séquence d’allumage du HUD
 }
-function go(v) { if (v !== view) boot = true; view = v; saveUI(); scrollTo({ top: 0 }); render(); }
+function go(v) { if (ALIAS[v]) { todoMode = ALIAS[v][1]; v = ALIAS[v][0]; } if (v !== view) boot = true; view = v; saveUI(); scrollTo({ top: 0 }); render(); }
 // Texte qui se « décode » : caractères aléatoires qui se figent un à un
 function decode(el, dur = 700, delay = 0) {
   if (!el) return; const target = el.textContent, glyphs = '█▓▒░<>/\\#01ΔΣ', t0 = performance.now() + delay;
@@ -662,7 +762,6 @@ function vToday(I, lateAll) {
   const late = T.filter(t => t.due && t.due < today()).sort((a, b) => a.due.localeCompare(b.due)), tod = T.filter(t => t.due === today());
   const week = T.filter(t => t.due > today() && t.due <= addDays(today(), 7)).sort((a, b) => a.due.localeCompare(b.due));
   const projs = I.projs.filter(p => (p.fm.statut || 'actif') === 'actif' && inS(p)).sort((a, b) => (a.fm.echeance || '9').localeCompare(b.fm.echeance || '9'));
-  const recent = I.idx.filter(x => inS(x) && x.kind !== 'boite').sort((a, b) => b.stamp - a.stamp).slice(0, 5);
   const revDue = !UI.review || daysTo(UI.review) <= -7;
   const lead = late.length ? `Il y a <em>${plural(late.length, 'tâche')} en retard</em>. On commence par « ${esc(plain(late[0].text))} » ?`
     : I.box.length > 5 ? `<em>${I.box.length} choses</em> attendent dans la boîte. Deux minutes de tri, et la tête est plus légère.`
@@ -677,13 +776,16 @@ function vToday(I, lateAll) {
     <div class="hud-d"><div class="hud-t"><i class="blip"></i><span>${st}</span><span class="clk" data-clock></span></div>
     <div class="hud-g"><span><b>${z(I.idx.length)}</b>Notes</span><span><b>${z(I.box.length)}</b>Boîte</span><span><b>${z(open)}</b>Tâches</span><span class="${I.asks.length ? 'hot' : ''}"><b>${z(I.asks.length)}</b>Assistant</span><span class="seg" title="Tâches faites">${Array.from({ length: 10 }, (_, i) => `<i class="${i < seg ? 'on' : ''}"></i>`).join('')}</span></div></div>${hudX(I)}</div>`;
   let h = domsHTML() + hud + `<p class="lead${typingDone ? '' : ' wait'}"><span class="pr">›</span>${lead}</p>`;
-  if (late.length || tod.length) h += lbl('À faire aujourd’hui', 'Toutes les tâches', 'taches', late.length ? '' : '') + `<div class="list">${[...late, ...tod].slice(0, 8).map(t => taskRow(t)).join('')}</div>`;
-  if (I.box.length) h += lbl(`Boîte de réception · ${I.box.length}`, 'Trier', 'boite') + `<div class="list">${I.box.slice(0, 3).map(noteRow).join('')}</div>`;
+  h += todayPills(); // Violette, PhantStudio
+  h += agendaHTML(); // rendez-vous du jour
+  const next = T.filter(t => t.due > today()).sort((a, b) => a.due.localeCompare(b.due))[0];
+  h += lbl(`À faire aujourd’hui${late.length + tod.length ? ' · ' + (late.length + tod.length) : ''}`, 'Tout voir', 'taches') + (late.length || tod.length
+    ? `<div class="list">${[...late, ...tod].slice(0, 6).map(t => taskRow(t)).join('')}</div>${late.length + tod.length > 6 ? `<button class="morebtn" data-go="taches">+ ${late.length + tod.length - 6} autres</button>` : ''}`
+    : `<div class="list"><p class="empty">Rien de prévu aujourd’hui.${next ? ` Prochaine : « ${esc(plain(next.text))} », ${dueLabel(next.due)}.` : ''}</p></div>`);
+  if (I.box.length) h += `<button class="boxbar" data-view="boite"><span class="bb-n">${I.box.length}</span><span><b>${I.box.length > 1 ? 'éléments' : 'élément'} à trier dans la boîte</b><small>${esc(I.box.slice(0, 3).map(x => x.title).join(' · '))}</small></span><span class="bb-go">Trier ›</span></button>`;
   if (I.asks.length) h += lbl(`Pour l’assistant · ${I.asks.length}`) + `<div class="list">${I.asks.map(askRow).join('')}</div>`;
-  if (week.length) h += lbl('Cette semaine') + `<div class="list">${week.slice(0, 6).map(t => taskRow(t)).join('')}</div>`;
-  h += lbl('Projets en cours', projs.length ? 'Tous' : '', 'projets') + (projs.length ? `<div class="list">${projs.slice(0, 5).map(projRow).join('')}</div>` : `<div class="list"><p class="empty">Aucun projet en cours.</p></div><div class="btns"><button class="btn line" data-act="newproj">＋ Nouveau projet</button></div>`);
+  h += lbl('Projets en cours', projs.length ? 'Tous' : '', 'projets') + (projs.length ? `<div class="list">${projs.slice(0, 3).map(projRow).join('')}</div>` : `<div class="list"><p class="empty">Aucun projet en cours.</p></div><div class="btns"><button class="btn line" data-act="newproj">＋ Nouveau projet</button></div>`);
   h += `<div class="duo"><button data-act="journal"><b>Journal du jour</b><small>${cap1(frDate(today(), { weekday: 'long', day: 'numeric', month: 'long' }))}</small></button><button data-act="review"><b>Revue de la semaine</b><small>${UI.review ? 'Dernière le ' + frDate(UI.review, { day: 'numeric', month: 'short' }) : 'Jamais faite'}${revDue ? ' · <span style="color:var(--acc);font-weight:700">à faire</span>' : ''}</small></button></div>`;
-  if (recent.length) h += lbl('Modifiées récemment') + `<div class="list">${recent.map(noteRow).join('')}</div>`;
   return h;
 }
 
@@ -694,45 +796,55 @@ function vBoite(I) {
     `<div class="list" style="margin-top:14px">${I.box.map(x => `<div class="row"><span class="gl">${dot(x.dom) || '<span class="dot" style="--c:var(--line)"></span>'}</span><span class="m"><span class="t clk" data-open="${esc(x.path)}" style="cursor:pointer;white-space:normal;font-family:var(--serif);font-size:16.5px">${esc(x.title)}</span>${x.body.trim() ? `<div class="doc" style="font-size:13.5px;color:var(--ink2);max-height:120px;overflow:hidden;margin-top:4px">${md(x.body)}</div>` : ''}<div class="btns" style="margin-top:8px"><button class="btn sm" data-classify="${esc(x.path)}" style="flex:0">Trier</button><button class="btn sm line" data-open="${esc(x.path)}" style="flex:0">Ouvrir</button></div></span><span class="r">${x.fm.cree ? frDate(x.fm.cree, { day: 'numeric', month: 'short' }) : ''}</span></div>`).join('')}</div>`;
 }
 
-/* ---------- Projets & domaines ---------- */
-function vProjets(I) {
-  const isP = x => x.kind === 'projet' || (x.kind === 'archive' && x.fm.type === 'projet');
-  const all = I.idx.filter(x => isP(x) && inS(x)), st = x => x.fm.statut || 'actif';
-  const inF = (x, k) => st(x) === k && (k === 'terminé' || x.kind === 'projet');
-  const L = all.filter(x => inF(x, projFilter)).sort((a, b) => (a.fm.echeance || '9').localeCompare(b.fm.echeance || '9') || byTitle(a, b));
-  const act = I.projs.filter(x => (x.fm.statut || 'actif') === 'actif' && inS(x)), at = act.flatMap(tasksOf), pc = at.length ? Math.round(at.filter(t => t.done).length * 100 / at.length) : 0;
-  let h = domsHTML() + hudm(`Module projets ▸ <b>${z3(act.length)}</b> en cours · <b>${z3(I.doms.filter(inS).length)}</b> domaines`, `Avancement <b>${pc}%</b>`) + `<div class="chips">${STATUTS.map(([k, l]) => `<button class="chip ${projFilter === k ? 'on' : ''}" data-pf="${k}">${l} <span style="opacity:.6">${all.filter(x => inF(x, k)).length}</span></button>`).join('')}</div>`;
-  h += `<div class="list">${L.length ? L.map(projRow).join('') : `<p class="empty">${projFilter === 'actif' ? 'Aucun projet en cours.' : 'Rien ici.'}</p>`}</div><div class="btns"><button class="btn line" data-act="newproj">＋ Nouveau projet</button></div>`;
-  const D = I.doms.filter(inS).sort(byTitle);
-  h += lbl('Domaines', '＋ Ajouter', 'newdom') + `<div class="list">${D.length ? D.map(x => { const o = tasksOf(x).filter(t => !t.done).length; return `<button class="row" data-open="${esc(x.path)}"><span class="gl">${dot(x.dom)}</span><span class="m"><span class="t" style="font-family:var(--serif);font-size:16.5px">${esc(x.title)}</span><span class="s">${esc(excerpt(x))}</span></span><span class="r">${o ? plural(o, 'tâche') : ''}</span></button>`; }).join('') : '<p class="empty">Aucun domaine.</p>'}</div>`;
-  return h;
-}
-
-/* ---------- Tâches ---------- */
-function vTaches(I) {
-  const all = I.tasks.filter(inS2);
+/* ---------- À faire : uniquement des actions (par date ou par projet) ---------- */
+function vAFaire(I) {
+  const all = I.tasks.filter(inS2), op = all.filter(t => !t.done), td = today();
+  const lt = op.filter(t => t.due && t.due < td).length, wk = op.filter(t => t.due && t.due <= addDays(td, 7)).length;
   const tgt = sphere && I.doms.find(d => d.title === sphere);
-  const op = all.filter(t => !t.done), lt = op.filter(t => t.due && t.due < today()).length, wk = op.filter(t => t.due && t.due <= addDays(today(), 7)).length;
-  let h = domsHTML() + hudm(`<b>${z3(op.length)}</b> ouvertes · <b class="${lt ? 'warn' : ''}">${z3(lt)}</b> en retard`, `Charge 7 j <b>${z3(wk)}</b>`) + `<div class="chips"><button class="chip ${showDone ? '' : 'on'}" data-sd="0">À faire <span style="opacity:.6">${all.filter(t => !t.done).length}</span></button><button class="chip ${showDone ? 'on' : ''}" data-sd="1">Faites</button></div>`;
-  h += `<div class="qadd"><span class="ck"></span><input id="qT" placeholder="Nouvelle tâche → ${esc(tgt ? tgt.title : 'boîte de réception')}" enterkeyhint="done"><button class="btn sm" id="qOk">Ajouter</button></div>`;
-  if (showDone) {
+  let h = domsHTML() + hudm(`<b>${z3(op.length)}</b> à faire · <b class="${lt ? 'warn' : ''}">${z3(lt)}</b> en retard`, `Charge 7 j <b>${z3(wk)}</b>`);
+  h += `<div class="seg3">${[['date', 'Par date'], ['projet', 'Par projet'], ['faites', 'Faites']].map(([k, l]) => `<button class="${todoMode === k ? 'on' : ''}" data-tm="${k}">${l}</button>`).join('')}</div>`;
+  if (todoMode !== 'faites') h += `<div class="qadd"><span class="ck"></span><input id="qT" placeholder="Nouvelle tâche → ${esc(tgt ? tgt.title : 'boîte de réception')}" enterkeyhint="done"><button class="btn sm" id="qOk">Ajouter</button></div>`;
+  if (todoMode === 'faites') {
     const D = all.filter(t => t.done).sort((a, b) => (b.doneAt || '').localeCompare(a.doneAt || '')).slice(0, 60);
-    return h + `<div class="list" style="border-top:0">${D.length ? D.map(t => taskRow(t)).join('') : '<p class="empty">Aucune tâche faite pour l’instant.</p>'}</div>`;
+    return h + `<div class="list">${D.length ? D.map(t => taskRow(t)).join('') : '<p class="empty">Aucune tâche faite pour l’instant.</p>'}</div>`;
   }
-  const T = all.filter(t => !t.done), td = today();
-  const G = [['En retard', T.filter(t => t.due && t.due < td), 'bad'], ["Aujourd'hui", T.filter(t => t.due === td)], ['Demain', T.filter(t => t.due === addDays(td, 1))],
-    ['Cette semaine', T.filter(t => t.due > addDays(td, 1) && t.due <= addDays(td, 7))], ['Plus tard', T.filter(t => t.due > addDays(td, 7))], ['Sans date', T.filter(t => !t.due)]];
+  if (todoMode === 'projet') {
+    const act = I.projs.filter(p => (p.fm.statut || 'actif') === 'actif' && inS(p)).sort((a, b) => (a.fm.echeance || '9').localeCompare(b.fm.echeance || '9') || byTitle(a, b));
+    const block = (x, kind) => {
+      const ts = tasksOf(x), o = ts.filter(t => !t.done), d = ts.length - o.length, pc = ts.length ? Math.round(d * 100 / ts.length) : 0;
+      const late = isISO(x.fm.echeance) && x.fm.echeance < td;
+      return `<div class="pblock" style="--c:${sc(x.dom)}"><button class="pb-h" data-open="${esc(x.path)}"><span class="pb-t">${kind === 'projet' ? ico('proj', 16) : dot(x.dom)}<b>${esc(x.title)}</b></span><span class="pb-m">${isISO(x.fm.echeance) ? `<span class="${late ? 'late' : ''}">${frDate(x.fm.echeance, { day: 'numeric', month: 'short' })}</span> · ` : ''}${ts.length ? `${d}/${ts.length}` : 'aucune tâche'}</span></button>${kind === 'projet' ? `<span class="bar"><i style="width:${pc}%"></i></span>` : ''}
+        <div class="list">${o.length ? o.sort((a, b) => (a.due || '9').localeCompare(b.due || '9')).map(t => taskRow(t, false)).join('') : `<p class="empty sm">${kind === 'projet' ? 'Plus rien à faire : projet terminé ?' : 'Rien en cours.'}</p>`}</div></div>`;
+    };
+    h += act.length ? act.map(p => block(p, 'projet')).join('') : `<p class="empty">Aucun projet en cours.</p>`;
+    h += `<div class="btns"><button class="btn line" data-act="newproj">＋ Nouveau projet</button><button class="btn line" data-act="oldproj">Projets en pause / terminés</button></div>`;
+    const D = I.doms.filter(x => inS(x) && tasksOf(x).some(t => !t.done)).sort(byTitle);
+    if (D.length) h += lbl('Domaines · ce qui revient') + D.map(x => block(x, 'domaine')).join('');
+    const loose = op.filter(t => !['projet', 'domaine'].includes(t.note.kind));
+    if (loose.length) h += lbl(`Sans projet · ${loose.length}`) + `<div class="list">${loose.map(t => taskRow(t)).join('')}</div>`;
+    return h;
+  }
+  const G = [['En retard', op.filter(t => t.due && t.due < td), 'bad'], ["Aujourd'hui", op.filter(t => t.due === td)], ['Demain', op.filter(t => t.due === addDays(td, 1))],
+    ['Cette semaine', op.filter(t => t.due > addDays(td, 1) && t.due <= addDays(td, 7))], ['Plus tard', op.filter(t => t.due > addDays(td, 7))], ['Sans date', op.filter(t => !t.due)]];
   const body = G.filter(g => g[1].length).map(([l, L, c]) => lbl(`${l} · ${L.length}`, '', '', c || '') + `<div class="list">${L.sort((a, b) => (a.due || '').localeCompare(b.due || '')).map(t => taskRow(t)).join('')}</div>`).join('');
   return h + (body || `<p class="empty">Aucune tâche à faire${sphere ? ' ici' : ''}.</p>`);
+}
+// Projets en pause ou terminés (rarement utiles : rangés dans un panneau à part)
+function oldProjects() {
+  const I = buildIndex(), L = I.idx.filter(x => (x.kind === 'projet' || (x.kind === 'archive' && x.fm.type === 'projet')) && (x.fm.statut === 'en pause' || x.fm.statut === 'terminé'));
+  const g = st => L.filter(x => x.fm.statut === st);
+  layer('Projets en pause / terminés', lbl(`En pause · ${g('en pause').length}`) + `<div class="list">${g('en pause').map(projRow).join('') || '<p class="empty">Aucun.</p>'}</div>` + lbl(`Terminés · ${g('terminé').length}`) + `<div class="list">${g('terminé').map(projRow).join('') || '<p class="empty">Aucun.</p>'}</div>`);
 }
 
 /* ---------- Notes (PARA) ---------- */
 function vNotes(I) {
-  const L = I.idx.filter(inS);
+  const L = I.idx.filter(x => inS(x) && x.kind !== 'boite' && x.kind !== 'fil');
   let h = domsHTML() + hudm(`Index ▸ <b>${z3(L.length)}</b> notes · <b>${z3(Object.keys(meta.files).length + meta.media.length)}</b> images`, meta.last ? `Màj ${new Date(meta.last).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}` : 'Local') + `<label class="search">${ico('search')}<input id="nq" value="${esc(nq)}" placeholder="Chercher dans toutes les notes…"></label>`;
-  if (nq.trim()) { const X = hits(nq); return h + `<div class="list">${X.length ? X.map(noteRow).join('') : '<p class="empty">Rien trouvé.</p>'}</div>`; }
-  UI.open ||= {};
-  for (const k of [...KINDS.filter(k => !k.hidden), { id: 'autre', label: 'À la racine', n: '·' }]) {
+  if (nq.trim()) { const X = hits(nq).filter(x => x.kind !== 'fil'); return h + `<div class="list">${X.length ? X.map(noteRow).join('') : '<p class="empty">Rien trouvé.</p>'}</div>`; }
+  UI.open ||= {}; if (UI.open.ressource === undefined) UI.open.ressource = true;
+  h += `<p class="hint notes-hint">Ici, ce que tu veux <b>garder</b> : idées, infos, références. Les choses à <b>faire</b> sont dans « À faire ».</p>`;
+  const ORDER = ['ressource', 'domaine', 'projet', 'journal', 'archive'], LBL = { ressource: 'Idées & ressources', domaine: 'Domaines', projet: 'Notes de projets', journal: 'Journal', archive: 'Archives' };
+  for (const k of [...ORDER.map(id => ({ ...KIND(id), label: LBL[id] })), { id: 'autre', label: 'Autres', n: '·' }]) {
     const X = L.filter(x => x.kind === k.id).sort(k.id === 'journal' ? (a, b) => b.title.localeCompare(a.title) : (a, b) => (a.sub || '').localeCompare(b.sub || '', 'fr') || byTitle(a, b));
     if (!X.length && ['autre', 'journal'].includes(k.id)) continue;
     let rows = '', cur = null;
@@ -747,8 +859,7 @@ function hits(q) {
 }
 
 function bindView() {
-  $$('[data-pf]').forEach(b => b.onclick = () => { projFilter = b.dataset.pf; render(); });
-  $$('[data-sd]').forEach(b => b.onclick = () => { showDone = b.dataset.sd === '1'; render(); });
+  $$('[data-tm]').forEach(b => b.onclick = () => { todoMode = b.dataset.tm; saveUI(); boot = true; render(); });
   $$('details.para').forEach(d => d.ontoggle = () => { UI.open[d.dataset.k] = d.open; saveUI(); });
   const qi = $('#nq'); if (qi) qi.oninput = () => { nq = qi.value; clearTimeout(qi._t); qi._t = setTimeout(() => { const p = qi.selectionStart; render(); const n = $('#nq'); n.focus(); n.setSelectionRange(p, p); }, 250); };
   const qT = $('#qT'); if (qT) {
@@ -763,7 +874,7 @@ function bindView() {
 }
 
 /* ---------- Clics communs ---------- */
-const ACTS = { settings: () => settings(), search: () => search(), journal: () => journal(), review: () => review(), newproj: () => newProject(), newnote: () => editNote(null), sync: () => ghReady() ? sync() : settings(), triall: () => { const b = buildIndex().box[0]; if (b) classify(b.path, true); } };
+const ACTS = { settings: () => settings(), search: () => search(), journal: () => journal(), review: () => review(), newproj: () => newProject(), oldproj: () => oldProjects(), calguide: () => calGuide(), calhide: () => { UI.noCal = true; saveUI(); render(); }, calkey: () => settings('cal'), newnote: () => editNote(null), sync: () => ghReady() ? sync() : settings(), triall: () => { const b = buildIndex().box[0]; if (b) classify(b.path, true); } };
 document.addEventListener('click', e => {
   const wl = e.target.closest('[data-wl]'); if (wl) { e.preventDefault(); return openWiki(wl.dataset.wl); }
   if (e.target.closest('a[target]')) return;
@@ -773,7 +884,8 @@ document.addEventListener('click', e => {
   const vw = e.target.closest('[data-view]'); if (vw) return go(vw.dataset.view);
   if (e.target.closest('[data-cap]')) return capture();
   const ac = e.target.closest('[data-act]'); if (ac) { const f = ACTS[ac.dataset.act]; if (f) { e.preventDefault(); return f(); } }
-  const g = e.target.closest('[data-go]'); if (g) { e.preventDefault(); return g.dataset.go === 'newdom' ? editNote(null, { kind: 'domaine', fm: { type: 'domaine' } }) : go(g.dataset.go); }
+  const cv = e.target.closest('[data-cal]'); if (cv) return analyseEvent(cv.dataset.cal);
+  const g = e.target.closest('[data-go]'); if (g) { e.preventDefault(); return g.dataset.go === 'newdom' ? editNote(null, { kind: 'domaine', fm: { type: 'domaine' } }) : g.dataset.go === 'calkey' ? settings('cal') : go(g.dataset.go); }
   const cl = e.target.closest('[data-classify]'); if (cl) return classify(cl.dataset.classify, false);
   const op = e.target.closest('[data-open]'); if (op) { e.preventDefault(); return openNote(op.dataset.open); }
 });
@@ -1200,7 +1312,7 @@ function review() {
     <div class="btns"><button class="btn line" id="r5">＋ Capturer</button><button class="btn" id="rOk">Revue faite</button></div>`);
   const on = (s, f) => { const el = $(s, pan); if (el) el.onclick = f; };
   on('#r1', () => { const b = buildIndex().box[0]; if (b) classify(b.path, true); });
-  on('#r2', () => closeLayer(() => { showDone = false; go('taches'); }));
+  on('#r2', () => closeLayer(() => go('taches')));
   on('#r3', () => openNote(stuck[0].path));
   on('#r4', () => { if (!confirm(`Archiver ${plural(fin.length, 'projet')} ?`)) return; fin.forEach(p => { setFm(p.path, { statut: 'terminé', fini: p.fm.fini || today() }); moveNote(p.path, uniquePath(dirOf('archive'), p.title)); }); toast('Archivés'); render(); review(); });
   on('#r5', () => capture());
@@ -1217,7 +1329,25 @@ function search() {
 }
 
 /* ---------- Réglages ---------- */
-function settings() {
+/* ---------- Notifications : abonnement de cet appareil (Web Push), envoyées par l'automate GitHub ---------- */
+const VAPID_PUBLIC = 'BCxNdYFAlYmepremJE0KZR36ByX1YXvx7ad4HWO0NOA-kvSA3zEYN9A04G1CbacXyoaRL_EVh1gZ-wVthZqXb3s';
+async function enablePush(msg) {
+  try {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) throw new Error('non prises en charge par ce navigateur');
+    if (await Notification.requestPermission() !== 'granted') throw new Error('autorisation refusée');
+    const reg = await navigator.serviceWorker.ready;
+    const key = Uint8Array.from(atob(VAPID_PUBLIC.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+    const sub = (await reg.pushManager.getSubscription()) || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+    const j = sub.toJSON(), dev = /Android/i.test(navigator.userAgent) ? 'Téléphone' : /Windows/i.test(navigator.userAgent) ? 'PC' : 'Appareil';
+    let cur = { subs: [], sent: {} }, sha;
+    try { const r = await gh('/contents/JSON_PUSH.json?ref=' + encodeURIComponent(cfg.branch)); sha = r.sha; cur = JSON.parse(b64d(r.content)); } catch (e) { if (e.status !== 404) throw e; }
+    cur.subs = (cur.subs || []).filter(x => x.endpoint !== j.endpoint).concat([{ endpoint: j.endpoint, keys: j.keys, device: dev, at: new Date().toISOString() }]);
+    await gh('/contents/JSON_PUSH.json', { method: 'PUT', body: { message: 'Cerveau : notifications activées (' + dev + ')', content: btoa(unescape(encodeURIComponent(JSON.stringify(cur, null, 1)))), branch: cfg.branch, ...(sha ? { sha } : {}) } });
+    UI.push = true; saveUI(); msg('✓ Notifications activées sur cet appareil'); schedule(300);
+  } catch (e) { msg('✗ ' + e.message); }
+}
+
+function settings(focus) {
   const hubTok = (() => { try { return JSON.parse(localStorage.getItem('hub.github') || '{}').token || ''; } catch { return ''; } })();
   const f = (id, l, v, at = '') => `<div class="fld"><label for="${id}">${l}</label><input id="${id}" value="${esc(v)}" ${at}></div>`;
   const pan = layer('Réglages', `
@@ -1227,16 +1357,25 @@ function settings() {
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${f('sO', 'Propriétaire', cfg.owner, 'autocapitalize="off"')}${f('sR', 'Dépôt', cfg.repo, 'autocapitalize="off"')}</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${f('sB', 'Branche', cfg.branch, 'autocapitalize="off"')}${f('sD', 'Dossier (facultatif)', cfg.root, 'autocapitalize="off" placeholder="racine"')}</div>
     ${f('sK', 'Jeton (Contents : lecture et écriture)', cfg.token, 'type="password" autocomplete="off"')}
+    <span class="sub" style="margin-top:16px">Agenda Google</span>
+    ${f('sC', 'Clé de l’agenda (reste sur cet appareil)', cfg.calKey || '', 'type="password" autocomplete="off" placeholder="la même que CAL_KEY dans GitHub"')}
+    <button type="button" class="btn sm line" data-act="calguide" style="margin:-6px 0 12px">Comment relier mon agenda ?</button>
+    <span class="sub" style="margin-top:6px">Notifications</span>
+    <p class="hint" style="margin-top:0">Rappels ⏰, résumé du matin vers 8 h et rendez-vous imminents, même appli fermée (à 15–30 min près).</p>
+    <div class="btns" style="margin:-2px 0 14px"><button type="button" class="btn line" id="sPush">${UI.push ? '✓ Activées · réactiver' : 'Activer sur cet appareil'}</button></div>
     ${hubTok && hubTok !== cfg.token ? `<button type="button" class="btn sm line" id="sHub" style="margin:-6px 0 12px">Reprendre le jeton de Quotidien</button>` : ''}
     <p class="hint" id="sMsg">Le jeton reste sur cet appareil. Tes notes sont de simples fichiers Markdown : tu peux aussi les ouvrir sur GitHub ou dans Obsidian.</p>
     <div class="btns"><button class="btn line" id="sTest">Tester</button><button class="btn" id="sOk">Enregistrer</button></div>
     <span class="sub" style="margin-top:22px">Avancé</span>
     <div class="btns" style="margin-top:4px"><button class="btn line" id="sReload">Tout recharger depuis GitHub</button><button class="btn bad" id="sOut">Se déconnecter de cet appareil</button></div>`);
   const getTh = chipGroup(pan, 'sTh');
+  $('#sPush', pan).onclick = () => enablePush(t => { $('#sMsg', pan).textContent = t; toast(t); });
+  if (focus === 'cal') setTimeout(() => { $('#sC', pan).scrollIntoView({ block: 'center' }); $('#sC', pan).focus(); }, 200);
   const val = id => $('#' + id, pan).value.trim();
   const collect = () => {
     const changedRepo = val('sO') !== cfg.owner || val('sR') !== cfg.repo || (val('sB') || 'main') !== cfg.branch || val('sD') !== cfg.root;
-    Object.assign(cfg, { owner: val('sO'), repo: val('sR'), branch: val('sB') || 'main', root: val('sD').replace(/^\/+|\/+$/g, ''), token: val('sK'), theme: getTh() || 'auto' });
+    if (val('sC') !== (cfg.calKey || '')) calPlain = {};
+    Object.assign(cfg, { owner: val('sO'), repo: val('sR'), branch: val('sB') || 'main', root: val('sD').replace(/^\/+|\/+$/g, ''), token: val('sK'), calKey: val('sC'), theme: getTh() || 'auto' });
     saveCfg(); applyTheme();
     if (changedRepo) { notes = {}; Object.assign(meta, { head: null, tree: null, treeSha: null, last: 0, deleted: {}, seeded: false }); persist(); }
   };

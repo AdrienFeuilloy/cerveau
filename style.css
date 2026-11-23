@@ -523,3 +523,55 @@ html[data-theme="light"] .sp-glow{animation-name:spglowl}
 .qin{width:100%;border:1px solid var(--line);background:var(--paper);border-radius:8px;padding:8px 10px;font:inherit;font-size:14.5px;outline:none;resize:vertical}
 .qin:focus{border-color:var(--hud);box-shadow:0 0 0 3px var(--hud-soft)}
 .qzend{margin:6px 0 14px;display:flex;justify-content:flex-end}
+
+/* ==========================================================
+   v2 : trois mondes clairs (À faire / Boîte / Notes) + liens avec les autres applis
+   ========================================================== */
+.tabs .bdg{position:absolute;top:2px;left:50%;margin-left:6px}
+.seg3{display:flex;background:var(--line2);border-radius:10px;padding:3px;margin:10px 0 4px}
+.seg3 button{flex:1;padding:8px 4px;border-radius:8px;font-weight:650;font-size:13.5px;color:var(--mut)}
+.seg3 button.on{background:var(--sheet);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.pblock{margin:18px 0 4px;padding-left:12px;border-left:3px solid var(--c)}
+.pb-h{display:flex;align-items:baseline;justify-content:space-between;gap:10px;width:100%;text-align:left;padding:2px 0}
+.pb-t{display:flex;align-items:center;gap:8px;min-width:0}
+.pb-t b{font:600 17px var(--serif);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pb-t svg{color:var(--c)}
+.pb-m{font:500 11.5px var(--mono);color:var(--mut);white-space:nowrap}
+.pblock .bar{margin:6px 0 2px}
+.pblock .list{border-top:0}
+.empty.sm{font-size:14px;padding:8px 2px}
+.morebtn{display:block;width:100%;text-align:center;padding:10px;font-weight:600;font-size:13px;color:var(--acc)}
+.boxbar{display:flex;align-items:center;gap:12px;width:100%;margin:18px 0 4px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--sheet);text-align:left}
+.boxbar:hover{border-color:var(--ink2)}
+.bb-n{flex:none;min-width:34px;height:34px;padding:0 6px;border-radius:17px;display:grid;place-items:center;font:700 15px var(--digits);background:var(--ink);color:var(--paper)}
+.boxbar b{display:block;font-size:14.5px}
+.boxbar small{display:block;color:var(--mut);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:62vw}
+.boxbar span:nth-child(2){flex:1;min-width:0}
+.bb-go{font-weight:700;font-size:13px;color:var(--acc);white-space:nowrap}
+.notes-hint{margin:2px 0 6px}
+/* Pastilles Violette / PhantStudio */
+.pills{display:grid;grid-template-columns:1fr;gap:10px;margin:18px 0 4px}
+@media (min-width:640px){.pills{grid-template-columns:1fr 1fr}}
+.pill{display:block;text-decoration:none;color:inherit;border:1px solid var(--line);border-radius:14px;padding:12px 14px;background:var(--sheet);position:relative;overflow:hidden}
+.pill::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--pc)}
+.pill.vio{--pc:#8b5cf6}.pill.pha{--pc:var(--phant)}
+.pl-h{display:flex;align-items:center;gap:8px;font:600 10.5px var(--digital);letter-spacing:.12em;text-transform:uppercase;color:var(--pc);margin-bottom:6px}
+.pl-dot{width:7px;height:7px;border-radius:50%;background:var(--pc);box-shadow:0 0 6px var(--pc)}
+.pl-go{margin-left:auto;font-size:15px}
+.pl-b{display:flex;flex-direction:column;gap:3px}
+.vm{font-size:14px;line-height:1.35}
+.vm i{font-style:normal;display:inline-block;min-width:62px;font:500 11px var(--mono);color:var(--mut);text-transform:uppercase;letter-spacing:.06em;margin-right:6px}
+/* Agenda */
+.calset{display:flex;align-items:center;gap:8px;margin:16px 0 2px;padding:10px 12px;border:1px dashed var(--line);border-radius:12px;font-size:13px;color:var(--ink2)}
+.calset span{flex:1;display:flex;gap:8px;align-items:flex-start}
+.calset .ib{width:30px;height:30px}
+.row.ev{align-items:center}
+.row.ev.past{opacity:.5}
+.evt{flex:none;width:52px;font:700 14px var(--digits);color:var(--hud);letter-spacing:.02em}
+.evt small{display:block;font:500 10.5px var(--mono);color:var(--mut)}
+.lock{color:var(--mut);font-weight:500;font-family:var(--mono);font-size:12.5px}
+.cal-tm{margin:6px 2px 0}
+.rem{color:var(--hud)}
+.guide{padding-left:20px;line-height:1.55;font-size:14.5px}
+.guide li{margin-bottom:10px}
+.evad{font:600 10.5px var(--mono);letter-spacing:.06em;text-transform:uppercase}

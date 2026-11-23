@@ -1,7 +1,7 @@
 // Service worker de Cerveau : l'appli s'ouvre même hors ligne.
 // Réseau d'abord (les mises à jour arrivent tout de suite), le cache sert de secours.
 // Les appels à l'API GitHub ne passent jamais par ici.
-const CACHE = "cerveau-v1.8.0";
+const CACHE = "cerveau-v2.0.1";
 const SHELL = ["./", "./index.html", "./style.css", "./app.js", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./apple-touch-icon.png", "./fonts/share-tech-mono.woff", "./fonts/orbitron.woff"];
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => Promise.all(SHELL.map(u => c.add(u).catch(() => {})))).then(() => self.skipWaiting()));
@@ -34,4 +34,15 @@ self.addEventListener("fetch", e => {
       .then(res => { if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(key, copy)); } return res; })
       .catch(() => caches.match(key).then(hit => hit || (req.mode === "navigate" ? caches.match(new URL("./", self.registration.scope).href) : Response.error())))
   );
+});
+
+// Notifications envoyées par l'automate GitHub (rappels, résumé du matin, rendez-vous)
+self.addEventListener("push", e => {
+  let d = {}; try { d = e.data ? e.data.json() : {}; } catch { d = { title: "Cerveau", body: e.data && e.data.text() }; }
+  e.waitUntil(self.registration.showNotification(d.title || "Cerveau", { body: d.body || "", tag: d.tag || undefined, renotify: !!d.tag, icon: "icon-192.png", badge: "icon-192.png", data: { url: d.url || "./" }, vibrate: [60, 40, 60] }));
+});
+self.addEventListener("notificationclick", e => {
+  e.notification.close();
+  const url = new URL((e.notification.data && e.notification.data.url) || "./", self.registration.scope).href;
+  e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(cs => { const c = cs.find(x => x.url.startsWith(self.registration.scope)); return c ? c.focus() : self.clients.openWindow(url); }));
 });
