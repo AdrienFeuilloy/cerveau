@@ -1330,21 +1330,38 @@ function search() {
 
 /* ---------- Réglages ---------- */
 /* ---------- Notifications : abonnement de cet appareil (Web Push), envoyées par l'automate GitHub ---------- */
-const VAPID_PUBLIC = 'BCxNdYFAlYmepremJE0KZR36ByX1YXvx7ad4HWO0NOA-kvSA3zEYN9A04G1CbacXyoaRL_EVh1gZ-wVthZqXb3s';
 async function enablePush(msg) {
   try {
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) throw new Error('non prises en charge par ce navigateur');
     if (await Notification.requestPermission() !== 'granted') throw new Error('autorisation refusée');
     const reg = await navigator.serviceWorker.ready;
-    const key = Uint8Array.from(atob(VAPID_PUBLIC.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
-    const sub = (await reg.pushManager.getSubscription()) || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
-    const j = sub.toJSON(), dev = /Android/i.test(navigator.userAgent) ? 'Téléphone' : /Windows/i.test(navigator.userAgent) ? 'PC' : 'Appareil';
     let cur = { subs: [], sent: {} }, sha;
     try { const r = await gh('/contents/JSON_PUSH.json?ref=' + encodeURIComponent(cfg.branch)); sha = r.sha; cur = JSON.parse(b64d(r.content)); } catch (e) { if (e.status !== 404) throw e; }
+    if (!cur.vapidPublic) throw new Error('crée d’abord la clé (étape 1)');
+    const key = Uint8Array.from(atob(cur.vapidPublic.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+    let sub = await reg.pushManager.getSubscription();
+    if (sub && btoa(String.fromCharCode(...new Uint8Array(sub.options.applicationServerKey || []))) !== btoa(String.fromCharCode(...key))) { await sub.unsubscribe(); sub = null; }
+    sub ||= await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+    const j = sub.toJSON(), dev = /Android/i.test(navigator.userAgent) ? 'Téléphone' : /Windows/i.test(navigator.userAgent) ? 'PC' : 'Appareil';
     cur.subs = (cur.subs || []).filter(x => x.endpoint !== j.endpoint).concat([{ endpoint: j.endpoint, keys: j.keys, device: dev, at: new Date().toISOString() }]);
     await gh('/contents/JSON_PUSH.json', { method: 'PUT', body: { message: 'Cerveau : notifications activées (' + dev + ')', content: btoa(unescape(encodeURIComponent(JSON.stringify(cur, null, 1)))), branch: cfg.branch, ...(sha ? { sha } : {}) } });
     UI.push = true; saveUI(); msg('✓ Notifications activées sur cet appareil'); schedule(300);
   } catch (e) { msg('✗ ' + e.message); }
+}
+
+// Étape 1 (une seule fois) : la paire de clés des notifications est créée ICI, sur ton appareil.
+// La clé publique va dans JSON_PUSH.json ; la clé privée ne s'affiche qu'à toi, à coller dans le secret GitHub VAPID_PRIVATE.
+async function makePushKeys(box) {
+  const kp = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits']);
+  const raw = new Uint8Array(await crypto.subtle.exportKey('raw', kp.publicKey)), jwk = await crypto.subtle.exportKey('jwk', kp.privateKey);
+  const pub = btoa(String.fromCharCode(...raw)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  let cur = { subs: [], sent: {} }, sha;
+  try { const r = await gh('/contents/JSON_PUSH.json?ref=' + encodeURIComponent(cfg.branch)); sha = r.sha; cur = JSON.parse(b64d(r.content)); } catch (e) { if (e.status !== 404) throw e; }
+  if (cur.vapidPublic && !confirm('Une clé existe déjà. En créer une nouvelle oblige à réactiver chaque appareil. Continuer ?')) return;
+  cur.vapidPublic = pub; cur.subs = [];
+  await gh('/contents/JSON_PUSH.json', { method: 'PUT', body: { message: 'Cerveau : clé des notifications', content: btoa(unescape(encodeURIComponent(JSON.stringify(cur, null, 1)))), branch: cfg.branch, ...(sha ? { sha } : {}) } });
+  box.innerHTML = `<div class="keybox"><span class="sub">Clé privée · à coller dans GitHub, nom <code>VAPID_PRIVATE</code></span><code id="vk">${esc(jwk.d)}</code><div class="btns"><button type="button" class="btn sm" id="vkc">Copier</button><a class="btn sm line" href="https://github.com/${encodeURIComponent(cfg.owner)}/${encodeURIComponent(cfg.repo)}/settings/secrets/actions/new" target="_blank" rel="noopener">Ouvrir les secrets GitHub</a></div><p class="hint">Elle n'est enregistrée nulle part ailleurs : si tu fermes sans la coller, recrée-la.</p></div>`;
+  $('#vkc', box).onclick = () => navigator.clipboard?.writeText(jwk.d).then(() => toast('Clé copiée'));
 }
 
 function settings(focus) {
@@ -1362,7 +1379,7 @@ function settings(focus) {
     <button type="button" class="btn sm line" data-act="calguide" style="margin:-6px 0 12px">Comment relier mon agenda ?</button>
     <span class="sub" style="margin-top:6px">Notifications</span>
     <p class="hint" style="margin-top:0">Rappels ⏰, résumé du matin vers 8 h et rendez-vous imminents, même appli fermée (à 15–30 min près).</p>
-    <div class="btns" style="margin:-2px 0 14px"><button type="button" class="btn line" id="sPush">${UI.push ? '✓ Activées · réactiver' : 'Activer sur cet appareil'}</button></div>
+    <div class="btns" style="margin:-2px 0 6px"><button type="button" class="btn line" id="sKeys">1 · Créer la clé (une fois)</button><button type="button" class="btn line" id="sPush">${UI.push ? '✓ 2 · Activées · réactiver' : '2 · Activer sur cet appareil'}</button></div><div id="sKeyBox" style="margin-bottom:14px"></div>
     ${hubTok && hubTok !== cfg.token ? `<button type="button" class="btn sm line" id="sHub" style="margin:-6px 0 12px">Reprendre le jeton de Quotidien</button>` : ''}
     <p class="hint" id="sMsg">Le jeton reste sur cet appareil. Tes notes sont de simples fichiers Markdown : tu peux aussi les ouvrir sur GitHub ou dans Obsidian.</p>
     <div class="btns"><button class="btn line" id="sTest">Tester</button><button class="btn" id="sOk">Enregistrer</button></div>
@@ -1370,6 +1387,7 @@ function settings(focus) {
     <div class="btns" style="margin-top:4px"><button class="btn line" id="sReload">Tout recharger depuis GitHub</button><button class="btn bad" id="sOut">Se déconnecter de cet appareil</button></div>`);
   const getTh = chipGroup(pan, 'sTh');
   $('#sPush', pan).onclick = () => enablePush(t => { $('#sMsg', pan).textContent = t; toast(t); });
+  $('#sKeys', pan).onclick = () => makePushKeys($('#sKeyBox', pan)).catch(e => toast('✗ ' + e.message));
   if (focus === 'cal') setTimeout(() => { $('#sC', pan).scrollIntoView({ block: 'center' }); $('#sC', pan).focus(); }, 200);
   const val = id => $('#' + id, pan).value.trim();
   const collect = () => {

@@ -575,3 +575,5 @@ html[data-theme="light"] .sp-glow{animation-name:spglowl}
 .guide{padding-left:20px;line-height:1.55;font-size:14.5px}
 .guide li{margin-bottom:10px}
 .evad{font:600 10.5px var(--mono);letter-spacing:.06em;text-transform:uppercase}
+.keybox{border:1px solid var(--hud);border-radius:10px;padding:10px 12px;background:var(--hud-soft)}
+.keybox code{display:block;word-break:break-all;font-size:12.5px;padding:6px 0}
