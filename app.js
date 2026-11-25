@@ -712,8 +712,8 @@ function shell() {
         <div class="acts"><button class="ib" data-act="sync" aria-label="Synchroniser"><span data-sync class="sync"></span></button><button class="ib" data-act="search" aria-label="Rechercher">${ico('search')}</button><button class="ib" data-act="settings" aria-label="Réglages">${ico('set')}</button></div>
       </header>
       <div id="view"></div>
-      <nav class="apps" aria-label="Mes applis">${APPS.map(([n, e, u]) => `<a href="${u}" target="_blank" rel="noopener" title="${n}" aria-label="${n}">${e}</a>`).join('')}</nav>
-      <p class="foot">Cerveau · v2.4.5</p>
+      <nav class="apps" aria-label="Mes applis">${APPS.map(([n, e, u]) => `<a href="${u}" target="_blank" rel="noopener" title="${n}" aria-label="${n}">${e}</a>`).join('')}<a href="#" data-act="work" title="Lancer ma session de travail" aria-label="Lancer ma session de travail">🛠️</a></nav>
+      <p class="foot">Cerveau · v2.5.0</p>
     </div></main>
     <nav class="tabs">
       <button data-view="today">${ico('today')}Aujourd’hui</button><button data-view="afaire">${ico('task')}À faire</button>
@@ -903,7 +903,7 @@ function bindView() {
 }
 
 /* ---------- Clics communs ---------- */
-const ACTS = { settings: () => settings(), search: () => search(), journal: () => journal(), review: () => review(), newproj: () => newProject(), oldproj: () => oldProjects(), calguide: () => calGuide(), loginlink: () => loginLinkSheet(), loginsetup: () => loginSetupSheet(), login: () => startLogin(), calhide: () => { UI.noCal = true; saveUI(); render(); }, calkey: () => settings('cal'), newnote: () => editNote(null), sync: () => ghReady() ? sync() : settings(), triall: () => { const b = buildIndex().box[0]; if (b) classify(b.path, true); } };
+const ACTS = { settings: () => settings(), search: () => search(), journal: () => journal(), review: () => review(), newproj: () => newProject(), oldproj: () => oldProjects(), calguide: () => calGuide(), loginlink: () => loginLinkSheet(), loginsetup: () => loginSetupSheet(), login: () => startLogin(), calhide: () => { UI.noCal = true; saveUI(); render(); }, calkey: () => settings('cal'), work: () => cfg.work ? open(cfg.work, '_blank', 'noopener') : settings('work'), newnote: () => editNote(null), sync: () => ghReady() ? sync() : settings(), triall: () => { const b = buildIndex().box[0]; if (b) classify(b.path, true); } };
 document.addEventListener('click', e => {
   const wl = e.target.closest('[data-wl]'); if (wl) { e.preventDefault(); return openWiki(wl.dataset.wl); }
   if (e.target.closest('a[target]')) return;
@@ -1183,15 +1183,22 @@ function openThread(path, line, raw) {
     ${tx?.ask ? `<div class="askbox"><span>◆ En attente de l’assistant</span>${esc(tx.fm.consigne || 'Réponse au dernier message')}</div>` : ''}
     <div class="msgs" id="thM">${intro.trim() ? `<div class="doc">${md(intro.trim())}</div>` : ''}${msgs.map(msgHTML).join('') || '<p class="empty">Aucun message. Lance le fil : une idée, une question, une piste…</p>'}</div>
     <div class="composer"><div class="capw"><textarea class="big" id="thT" rows="3" placeholder="Écris dans le fil…" style="min-height:90px;font-size:17px"></textarea><span class="tag"><i class="wv"><b></b><b></b><b></b><b></b><b></b><b></b><b></b></i>Écoute</span></div>
+      <div class="thumbs" id="thI"></div><div class="chips" style="margin-top:6px"><button type="button" class="chip" id="thP">📷 Photo</button></div>
       <label class="askchk"><input type="checkbox" id="thA"> ◆ Demander à l’assistant <small>réponse ou questionnaire dans le fil</small></label>
       <div class="btns"><button class="btn" id="thOk">Envoyer</button></div></div>`, { page: true });
   hydrate($('#thM', pan));
   if (tp) bindQz($('#thM', pan), tp, () => openThread(path, i, notes[path].text.split('\n')[i]));
   $('#thCk', pan).onclick = e => { const L = notes[path].text.split('\n'); if (toggleLine(path, i, L[i])) ping(e.currentTarget); render(); openThread(path, i, notes[path].text.split('\n')[i]); };
   $('#thT', pan).onkeydown = e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) $('#thOk', pan).click(); };
-  $('#thOk', pan).onclick = () => {
-    const msg = $('#thT', pan).value.trim(), ask = $('#thA', pan).checked;
-    if (!msg && !ask) return toast('Écris quelque chose');
+  const imgs = [];
+  const drawImgs = () => { $('#thI', pan).innerHTML = imgs.map((m, k) => `<span class="th"><img src="${m.url}" alt=""><button type="button" data-rm="${k}" aria-label="Retirer">×</button></span>`).join(''); };
+  $('#thI', pan).onclick = e => { const b = e.target.closest('[data-rm]'); if (b) { imgs.splice(+b.dataset.rm, 1); drawImgs(); } };
+  $('#thP', pan).onclick = () => { const f = document.createElement('input'); f.type = 'file'; f.accept = 'image/*'; f.multiple = true; f.onchange = async () => { for (const x of f.files) { const r = await shrink(x); imgs.push({ ...r, url: URL.createObjectURL(r.blob) }); } drawImgs(); }; f.click(); };
+  $('#thOk', pan).onclick = async () => {
+    let msg = $('#thT', pan).value.trim(); const ask = $('#thA', pan).checked;
+    if (!msg && !ask && !imgs.length) return toast('Écris quelque chose');
+    $('#thOk', pan).disabled = true;
+    for (let k = 0; k < imgs.length; k++) msg += `${msg ? '\n' : ''}![[${await addMedia(imgs[k].blob, imgs[k].ext, k + 1)}]]`;
     let fp = tp, L = notes[path].text.split('\n');
     if (!fp) {
       const nid = Math.random().toString(36).slice(2, 8);
@@ -1562,6 +1569,8 @@ function settings(focus) {
     <span class="sub" style="margin-top:16px">Agenda Google</span>
     ${f('sC', 'Clé de l’agenda (reste sur cet appareil)', cfg.calKey || '', 'type="password" autocomplete="off" placeholder="la même que CAL_KEY dans GitHub"')}
     <button type="button" class="btn sm line" data-act="calguide" style="margin:-6px 0 12px">Comment relier mon agenda ?</button>
+    <span class="sub" style="margin-top:6px">Session de travail</span>
+    ${f('sW', 'Lien ouvert par 🛠️ en bas de page (reste sur cet appareil)', cfg.work || '', 'type="url" autocapitalize="off" placeholder="https://…"')}
     <span class="sub" style="margin-top:6px">Notifications</span>
     <p class="hint" style="margin-top:0">Rappels ⏰, résumé du matin vers 8 h et rendez-vous imminents, même appli fermée (à 15–30 min près).</p>
     <div class="btns" style="margin:-2px 0 6px"><button type="button" class="btn line" id="sKeys">1 · Créer la clé (une fois)</button><button type="button" class="btn line" id="sPush">${UI.push ? '✓ 2 · Activées · réactiver' : '2 · Activer sur cet appareil'}</button></div><div id="sKeyBox" style="margin-bottom:14px"></div>
@@ -1572,12 +1581,13 @@ function settings(focus) {
   const getTh = chipGroup(pan, 'sTh');
   $('#sPush', pan).onclick = () => enablePush(t => { $('#sMsg', pan).textContent = t; toast(t); });
   $('#sKeys', pan).onclick = () => makePushKeys($('#sKeyBox', pan)).catch(e => toast('✗ ' + e.message));
+  if (focus === 'work') setTimeout(() => { $('#sW', pan).scrollIntoView({ block: 'center' }); $('#sW', pan).focus(); }, 200);
   if (focus === 'cal') setTimeout(() => { $('#sC', pan).scrollIntoView({ block: 'center' }); $('#sC', pan).focus(); }, 200);
   const val = id => $('#' + id, pan).value.trim();
   const collect = () => {
     const changedRepo = val('sO') !== cfg.owner || val('sR') !== cfg.repo || (val('sB') || 'main') !== cfg.branch || val('sD') !== cfg.root;
     if (val('sC') !== (cfg.calKey || '')) calPlain = {};
-    Object.assign(cfg, { owner: val('sO'), repo: val('sR'), branch: val('sB') || 'main', root: val('sD').replace(/^\/+|\/+$/g, ''), token: val('sK'), calKey: val('sC'), theme: getTh() || 'auto' });
+    Object.assign(cfg, { owner: val('sO'), repo: val('sR'), branch: val('sB') || 'main', root: val('sD').replace(/^\/+|\/+$/g, ''), token: val('sK'), calKey: val('sC'), work: val('sW'), theme: getTh() || 'auto' });
     saveCfg(); applyTheme();
     if (changedRepo) { notes = {}; Object.assign(meta, { head: null, tree: null, treeSha: null, last: 0, deleted: {}, seeded: false }); persist(); }
   };
