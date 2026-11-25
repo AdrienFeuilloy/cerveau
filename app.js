@@ -710,7 +710,7 @@ function shell() {
         <div class="acts"><button class="ib" data-act="sync" aria-label="Synchroniser"><span data-sync class="sync"></span></button><button class="ib" data-act="search" aria-label="Rechercher">${ico('search')}</button><button class="ib" data-act="settings" aria-label="Réglages">${ico('set')}</button></div>
       </header>
       <div id="view"></div>
-      <p class="foot">Cerveau · v2.4.2</p>
+      <p class="foot">Cerveau · v2.4.3</p>
     </div></main>
     <nav class="tabs">
       <button data-view="today">${ico('today')}Aujourd’hui</button><button data-view="afaire">${ico('task')}À faire</button>
@@ -728,7 +728,7 @@ function render() {
   $('#kick').textContent = view === 'today' ? frDate(today(), { weekday: 'long', day: 'numeric', month: 'long' }) : (sphere || 'Tous les domaines');
   $('#ttl').textContent = view === 'today' ? (new Date().getHours() < 18 && new Date().getHours() >= 5 ? 'Bonjour.' : 'Bonsoir.') : VIEWS[view];
   const bdg = $('#bdg'); bdg.hidden = !I.box.length; bdg.textContent = I.box.length;
-  const counts = { boite: I.box.length || '', afaire: I.tasks.filter(t => !t.done && t.due && t.due <= today() && inS2(t)).length || '', notes: I.idx.filter(x => inS(x) && x.kind !== 'fil').length };
+  const counts = { boite: I.box.length || '', afaire: I.tasks.filter(t => !t.done && t.due && t.due <= today() && inS2(t)).length || '', notes: notesOf(I).n };
   $$('[data-count]').forEach(el => el.textContent = counts[el.dataset.count] ?? '');
   $('#sideDoms').innerHTML = [['', 'Tout'], ...SPHERES.map(s => [s.id, s.id])].map(([k, l]) => `<button class="nav ${sphere === k ? 'on' : ''}" data-sph="${esc(k)}">${k ? dot(k) : '<span class="dot" style="--c:var(--ink)"></span>'}${esc(l)}</button>`).join('');
   $$('[data-view]').forEach(b => b.classList.toggle('on', b.dataset.view === view));
@@ -798,7 +798,7 @@ function vToday(I, lateAll) {
   const st = !ghReady() ? 'Mode local' : sstate === 'err' ? 'Liaison · erreur' : pend ? `Liaison · ${pend} en attente` : 'Liaison GitHub · OK';
   const hud = `<div class="hud" aria-hidden="true"><svg class="hud-ring" viewBox="0 0 40 40"><circle class="t" cx="20" cy="20" r="19.4"/><path class="sw" d="M20 20 L20 3 A17 17 0 0 1 34.7 11.5 Z"/><circle class="a" cx="20" cy="20" r="17.2"/><circle class="b" cx="20" cy="20" r="13"/><circle class="c" cx="20" cy="20" r="8"/><circle class="d" cx="20" cy="20" r="3"/></svg>
     <div class="hud-d"><div class="hud-t"><i class="blip"></i><span>${st}</span><span class="clk" data-clock></span></div>
-    <div class="hud-g"><span><b>${z(I.idx.length)}</b>Notes</span><span><b>${z(I.box.length)}</b>Boîte</span><span><b>${z(open)}</b>Tâches</span><span class="${I.asks.length ? 'hot' : ''}"><b>${z(I.asks.length)}</b>Assistant</span><span class="seg" title="Tâches faites">${Array.from({ length: 10 }, (_, i) => `<i class="${i < seg ? 'on' : ''}"></i>`).join('')}</span></div></div>${hudX(I)}</div>`;
+    <div class="hud-g"><span><b>${z(notesOf(I).n)}</b>Notes</span><span><b>${z(I.box.length)}</b>Boîte</span><span><b>${z(open)}</b>Tâches</span><span class="${I.asks.length ? 'hot' : ''}"><b>${z(I.asks.length)}</b>Assistant</span><span class="seg" title="Tâches faites">${Array.from({ length: 10 }, (_, i) => `<i class="${i < seg ? 'on' : ''}"></i>`).join('')}</span></div></div>${hudX(I)}</div>`;
   let h = domsHTML() + hud + `<p class="lead${typingDone ? '' : ' wait'}"><span class="pr">›</span>${lead}</p>`;
   h += todayPills(); // Violette, PhantStudio
   h += agendaHTML(); // rendez-vous du jour
@@ -861,10 +861,15 @@ function oldProjects() {
 }
 
 /* ---------- Notes (PARA) ---------- */
-function vNotes(I) {
+// Ce que montre l'écran Notes : notes à garder, journal et archives (les compteurs comptent exactement ça)
+function notesOf(I) {
   const keep = I.idx.filter(x => inS(x) && (x.kind === 'ressource' || x.kind === 'autre')).sort((a, b) => b.stamp - a.stamp);
   const J = I.idx.filter(x => x.kind === 'journal').sort((a, b) => b.title.localeCompare(a.title));
   const A = I.idx.filter(x => x.kind === 'archive' && inS(x)).sort((a, b) => b.stamp - a.stamp);
+  return { keep, J, A, n: keep.length + J.length + A.length };
+}
+function vNotes(I) {
+  const { keep, J, A } = notesOf(I);
   let h = domsHTML() + hudm(`Carnet ▸ <b>${z3(keep.length)}</b> notes à garder`, meta.last ? `Màj ${new Date(meta.last).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}` : 'Local') + `<label class="search">${ico('search')}<input id="nq" value="${esc(nq)}" placeholder="Chercher partout (notes, projets, tâches)…"></label>`;
   if (nq.trim()) { const X = hits(nq).filter(x => x.kind !== 'fil'); return h + `<div class="list">${X.length ? X.map(noteRow).join('') : '<p class="empty">Rien trouvé.</p>'}</div>`; }
   h += `<p class="hint notes-hint">Ce que tu veux <b>garder</b> : idées, recettes, liens, infos. Ce qui est à <b>faire</b> vit dans « À faire ».</p>`;
