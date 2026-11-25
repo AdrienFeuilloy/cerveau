@@ -247,6 +247,8 @@ function hydrate(root) {
    Seul le strict nécessaire est gardé sur l'appareil (pas d'adresses, pas de montants). */
 const EXT_FILES = ['JSON_VIOLETTE.json', 'data.json', 'JSON_AGENDA.json'];
 const VIOLETTE_URL = 'https://adrienfeuilloy.github.io/Violette-app/violette.html', PHANT_URL = 'https://adrienfeuilloy.github.io/phant-studio-app/';
+const HUB = 'https://adrienfeuilloy.github.io/Violette-app/';
+const APPS = [['Accueil du hub', '🏠', HUB], ['Violette', '🍼', VIOLETTE_URL], ['Habits', '👕', HUB + 'habits.html'], ['Animaux', '🐾', HUB + 'animaux.html'], ['Plantes', '🪴', HUB + 'plantes.html'], ['Cha-cha', '💶', HUB + 'budget.html'], ['Paperasse', '📄', HUB + 'paperasse.html'], ['Garage', '🚗', HUB + 'garage.html'], ['Colis', '📦', HUB + 'colis.html'], ['Collections', '🗂️', HUB + 'collections.html'], ['Suivi Phant', '🎨', PHANT_URL]];
 let ext = read('ext', {}) || {};
 function slimExt(f, d) {
   if (f === 'JSON_VIOLETTE.json') return { plans: d.weeklyMealPlans || {}, meals: d.settings?.meals || {} };
@@ -710,7 +712,8 @@ function shell() {
         <div class="acts"><button class="ib" data-act="sync" aria-label="Synchroniser"><span data-sync class="sync"></span></button><button class="ib" data-act="search" aria-label="Rechercher">${ico('search')}</button><button class="ib" data-act="settings" aria-label="Réglages">${ico('set')}</button></div>
       </header>
       <div id="view"></div>
-      <p class="foot">Cerveau · v2.4.3</p>
+      <nav class="apps" aria-label="Mes applis">${APPS.map(([n, e, u]) => `<a href="${u}" target="_blank" rel="noopener" title="${n}" aria-label="${n}">${e}</a>`).join('')}</nav>
+      <p class="foot">Cerveau · v2.4.4</p>
     </div></main>
     <nav class="tabs">
       <button data-view="today">${ico('today')}Aujourd’hui</button><button data-view="afaire">${ico('task')}À faire</button>

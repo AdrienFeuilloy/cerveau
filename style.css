@@ -199,7 +199,10 @@ a[data-wl].miss{opacity:.55}
 .toast.show{opacity:1;transform:translate(-50%,0)}
 .spin{width:28px;height:28px;border:2px solid var(--line);border-top-color:var(--ink);border-radius:50%;animation:rot 1s linear infinite;margin:40px auto 10px}
 @keyframes rot{to{transform:rotate(360deg)}}
-.foot{text-align:center;font:500 11px var(--mono);color:var(--mut);margin:34px 0 10px}
+.foot{text-align:center;font:500 11px var(--mono);color:var(--mut);margin:8px 0 10px}
+.apps{display:flex;flex-wrap:wrap;justify-content:center;gap:4px;margin-top:34px}
+.apps a{width:34px;height:34px;display:grid;place-items:center;font-size:17px;border-radius:50%;opacity:.7;filter:grayscale(.4);transition:opacity .15s,filter .15s}
+.apps a:hover,.apps a:focus-visible{opacity:1;filter:none;background:var(--line2)}
 
 /* ---------- Ordinateur ---------- */
 @media (min-width:960px){
