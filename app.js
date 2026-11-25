@@ -54,8 +54,7 @@ const ico = (n, size) => `<svg class="i" viewBox="0 0 24 24"${size ? ` style="wi
 
 /* ---------- Réglages (sur cet appareil) ---------- */
 const cfg = Object.assign({ owner: 'AdrienFeuilloy', repo: 'phant-studio-data', branch: 'main', token: '', root: 'Cerveau', theme: 'auto' }, read('config', {}) || {});
-// Même dépôt privé que les applis de Quotidien (même domaine GitHub Pages) : on reprend son jeton, rien à ressaisir
-// Pas de reprise silencieuse du jeton de Quotidien : sur un nouvel appareil, on se connecte (identifiant + mot de passe).
+// Connexion propre à Cerveau : rien n'est lu ni écrit dans le stockage des autres applis du même domaine.
 const saveCfg = () => write('config', cfg);
 const ghReady = () => !!(cfg.owner && cfg.repo && cfg.token);
 function applyTheme() {
@@ -711,7 +710,7 @@ function shell() {
         <div class="acts"><button class="ib" data-act="sync" aria-label="Synchroniser"><span data-sync class="sync"></span></button><button class="ib" data-act="search" aria-label="Rechercher">${ico('search')}</button><button class="ib" data-act="settings" aria-label="Réglages">${ico('set')}</button></div>
       </header>
       <div id="view"></div>
-      <p class="foot">Cerveau · v2.4.1</p>
+      <p class="foot">Cerveau · v2.4.2</p>
     </div></main>
     <nav class="tabs">
       <button data-view="today">${ico('today')}Aujourd’hui</button><button data-view="afaire">${ico('task')}À faire</button>
@@ -1429,7 +1428,7 @@ async function makePushKeys(box) {
    GitHub n'accepte plus le mot de passe GitHub pour les applis : on chiffre donc le jeton
    (et la clé de l'agenda) avec TON identifiant + mot de passe, dans un lien de connexion.
    Le lien ne contient que du chiffré (après #, jamais envoyé à un serveur). Nouvel appareil :
-   ouvrir le lien → identifiant + mot de passe → connecté (Cerveau et les applis de Quotidien).
+   ouvrir le lien → identifiant + mot de passe → connecté à Cerveau seulement.
    ========================================================== */
 const ITER = 600000;
 const u64 = b => btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -1479,7 +1478,6 @@ async function openLogin(blob) {
       const d = JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: all.slice(16, 28) }, key, all.slice(28))));
       const changed = d.o !== cfg.owner || d.r !== cfg.repo || (d.d || '') !== cfg.root;
       Object.assign(cfg, { owner: d.o, repo: d.r, branch: d.b || 'main', root: d.d || '', token: d.k, ...(d.c ? { calKey: d.c } : {}) }); saveCfg();
-      try { if (!JSON.parse(localStorage.getItem('hub.github') || '{}').token) localStorage.setItem('hub.github', JSON.stringify({ owner: d.o, repo: d.r, branch: d.b || 'main', token: d.k })); } catch { }
       if (changed) { notes = {}; Object.assign(meta, { head: null, tree: null, treeSha: null, last: 0, deleted: {}, seeded: false }); persist(); }
       if (location.hash) history.replaceState(null, '', location.pathname); vibrate(); toast('Connecté ✓');
       closeLayer(() => { render(); sync(); });
@@ -1542,7 +1540,6 @@ function loginLinkSheet() {
 }
 
 function settings(focus) {
-  const hubTok = (() => { try { return JSON.parse(localStorage.getItem('hub.github') || '{}').token || ''; } catch { return ''; } })();
   const f = (id, l, v, at = '') => `<div class="fld"><label for="${id}">${l}</label><input id="${id}" value="${esc(v)}" ${at}></div>`;
   const pan = layer('Réglages', `
     <span class="sub">Apparence</span>
@@ -1560,7 +1557,6 @@ function settings(focus) {
     <span class="sub" style="margin-top:6px">Notifications</span>
     <p class="hint" style="margin-top:0">Rappels ⏰, résumé du matin vers 8 h et rendez-vous imminents, même appli fermée (à 15–30 min près).</p>
     <div class="btns" style="margin:-2px 0 6px"><button type="button" class="btn line" id="sKeys">1 · Créer la clé (une fois)</button><button type="button" class="btn line" id="sPush">${UI.push ? '✓ 2 · Activées · réactiver' : '2 · Activer sur cet appareil'}</button></div><div id="sKeyBox" style="margin-bottom:14px"></div>
-    ${hubTok && hubTok !== cfg.token ? `<button type="button" class="btn sm line" id="sHub" style="margin:-6px 0 12px">Reprendre le jeton de Quotidien</button>` : ''}
     <p class="hint" id="sMsg">Le jeton reste sur cet appareil. Tes notes sont de simples fichiers Markdown : tu peux aussi les ouvrir sur GitHub ou dans Obsidian.</p>
     <div class="btns"><button class="btn line" id="sTest">Tester</button><button class="btn" id="sOk">Enregistrer</button></div>
     <span class="sub" style="margin-top:22px">Avancé</span>
@@ -1577,7 +1573,6 @@ function settings(focus) {
     saveCfg(); applyTheme();
     if (changedRepo) { notes = {}; Object.assign(meta, { head: null, tree: null, treeSha: null, last: 0, deleted: {}, seeded: false }); persist(); }
   };
-  if ($('#sHub', pan)) $('#sHub', pan).onclick = () => { $('#sK', pan).value = hubTok; toast('Jeton repris. Vérifie qu’il donne accès au dépôt des notes.'); };
   $('#sTest', pan).onclick = async () => {
     const m = $('#sMsg', pan), keep = { ...cfg };
     Object.assign(cfg, { owner: val('sO'), repo: val('sR'), token: val('sK') });
@@ -1599,7 +1594,6 @@ function settings(focus) {
   $('#sOut', pan).onclick = () => {
     if (!confirm(meta.dirty ? 'Des notes ne sont pas encore envoyées sur GitHub et seront perdues. Effacer quand même ?' : 'Effacer de cet appareil le jeton et toutes les notes ? Rien n’est effacé sur GitHub.')) return;
     Object.keys(localStorage).filter(k => k.startsWith(P)).forEach(k => localStorage.removeItem(k));
-    try { if (JSON.parse(localStorage.getItem('hub.github') || '{}').token && confirm('Déconnecter aussi les applis de Quotidien sur cet appareil ?')) localStorage.removeItem('hub.github'); } catch { }
     sessionStorage.clear(); location.replace(location.pathname);
   };
 }

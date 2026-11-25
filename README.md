@@ -23,7 +23,7 @@ Les notes ne sont **pas** dans ce dépôt : ce sont de simples fichiers Markdown
 
 ## Réglages (une fois par appareil)
 
-Icône réglages → **Propriétaire**, **Dépôt** (le dépôt privé), **Branche**, **Dossier** (`Cerveau`), **Jeton**. Si un jeton est déjà enregistré pour ce même dépôt sur ce navigateur, il est repris automatiquement.
+Icône réglages → **Propriétaire**, **Dépôt** (le dépôt privé), **Branche**, **Dossier** (`Cerveau`), **Jeton**. Cerveau garde sa propre connexion : il ne lit ni ne partage le jeton des autres applis du même site.
 
 Jeton : GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens. Accès au seul dépôt des notes, permission **Contents : Read and write**.
 
@@ -116,7 +116,7 @@ Un automate GitHub Actions du dépôt privé (`.github/workflows/cerveau.yml`) t
 
 ## Connexion sur un nouvel appareil
 
-**Login simple.** Réglages → « Activer le login » (depuis un appareil déjà relié) : on choisit un identifiant et un mot de passe propres à Cerveau (12 caractères ou plus). Le jeton (et, au choix, la clé de l'agenda) est chiffré avec eux (PBKDF2 600 000 itérations + AES-GCM) et publié dans `acces.json`, à la racine de ce dépôt. Seul le chiffré est public. Le jeton doit avoir accès en écriture au dépôt `cerveau` pour publier ce fichier. Sur un nouvel appareil, on ouvre l'appli, on saisit identifiant et mot de passe, c'est tout. Les applis de Quotidien (même domaine) reçoivent aussi le jeton si elles n'en ont pas.
+**Login simple.** Réglages → « Activer le login » (depuis un appareil déjà relié) : on choisit un identifiant et un mot de passe propres à Cerveau (12 caractères ou plus). Le jeton (et, au choix, la clé de l'agenda) est chiffré avec eux (PBKDF2 600 000 itérations + AES-GCM) et publié dans `acces.json`, à la racine de ce dépôt. Seul le chiffré est public. Le jeton doit avoir accès en écriture au dépôt `cerveau` pour publier ce fichier. Sur un nouvel appareil, on ouvre l'appli, on saisit identifiant et mot de passe, c'est tout. Ce login ne connecte que Cerveau : les autres applis ont chacune le leur.
 
 **Lien de connexion (variante).** Même chiffrement, mais dans un lien `…/cerveau/#connexion=…` au lieu d'un fichier publié. La partie après `#` n'est jamais envoyée à un serveur.
 
