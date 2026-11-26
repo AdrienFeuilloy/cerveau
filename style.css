@@ -615,3 +615,7 @@ html[data-theme="light"] .sp-glow{animation-name:spglowl}
 .rc-l .past{opacity:.45}.rc-l .bad i{color:var(--bad)}.rc-l .more{color:var(--mut)}
 .rc-e{margin:0 0 8px;color:var(--mut)}
 @media (prefers-reduced-motion:reduce){.rc,.rc-in,.rc-g,.rc-l li,.rc-scan::after{animation:none}}
+/* Agenda familial (2e adresse iCal) : liseré et étiquette */
+:root{--fam:#d23f8a}html[data-theme="dark"]{--fam:#ff86c4}
+.row.ev.fam{box-shadow:inset 3px 0 0 var(--fam);padding-left:10px}
+.evfam{display:inline-block;margin-top:2px;padding:0 6px;border-radius:4px;background:color-mix(in srgb,var(--fam) 14%,transparent);color:var(--fam);font:600 10px/1.6 var(--mono);letter-spacing:.1em;text-transform:uppercase}

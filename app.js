@@ -670,7 +670,7 @@ const evOn = (e, d) => e.s.slice(0, 10) === d || (e.ad && e.s.slice(0, 10) <= d 
 const evSort = (x, y) => (x.ad ? '0' : x.s).localeCompare(y.ad ? '0' : y.s);
 function evRow(e, day = today(), ask = true) {
   const t = cfg.calKey ? calPlain[e.id] : undefined, past = day === today() && !e.ad && (e.e || e.s).slice(11, 16) < new Date().toTimeString().slice(0, 5);
-    return `<div class="row ev ${past ? 'past' : ''}"><span class="evt">${evTime(e)}${!e.ad && e.e ? `<small>${e.e.slice(11, 16).replace(':', 'h')}</small>` : ''}</span><span class="m"><span class="t">${t ? esc(t) : t === null ? '<span class="lock">🔒 Clé de l’agenda incorrecte</span>' : `<span class="lock">🔒 ${cfg.calKey ? 'déchiffrement…' : 'Titre chiffré'}</span>`}</span></span>${t && ask ? `<button class="btn sm line askbtn" data-cal="${esc(e.id)}">◆ Analyser</button>` : ''}</div>`;
+    return `<div class="row ev ${past ? 'past' : ''}${e.c ? ' fam' : ''}"><span class="evt">${evTime(e)}${!e.ad && e.e ? `<small>${e.e.slice(11, 16).replace(':', 'h')}</small>` : ''}</span><span class="m"><span class="t">${t ? esc(t) : t === null ? '<span class="lock">🔒 Clé de l’agenda incorrecte</span>' : `<span class="lock">🔒 ${cfg.calKey ? 'déchiffrement…' : 'Titre chiffré'}</span>`}</span>${e.c ? '<span class="evfam">Famille</span>' : ''}</span>${t && ask ? `<button class="btn sm line askbtn" data-cal="${esc(e.id)}">◆ Analyser</button>` : ''}</div>`;
 }
 // Vue Agenda : 3 semaines, jour par jour : rendez-vous Google et échéances de projets (pas les tâches)
 function vAgenda(I) {
@@ -751,7 +751,7 @@ function shell() {
       </header>
       <div id="view"></div>
       <nav class="apps" aria-label="Mes applis">${APPS.map(([n, e, u]) => `<a href="${u}" target="_blank" rel="noopener" title="${n}" aria-label="${n}">${e}</a>`).join('')}<a href="#" data-act="work" title="Lancer ma session de travail" aria-label="Lancer ma session de travail">🛠️</a></nav>
-      <p class="foot">Cerveau · v2.6.1</p>
+      <p class="foot">Cerveau · v2.6.2</p>
     </div></main>
     <nav class="tabs">
       <button data-view="today">${ico('today')}Aujourd’hui</button><button data-view="agenda">${ico('cal')}Agenda</button><button data-view="afaire">${ico('task')}À faire</button>
