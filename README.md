@@ -55,6 +55,17 @@ demande: 2026-11-20
 
 Traitement : la réponse est ajoutée sous `## Réponse de l'assistant`, puis l'en-tête passe à `assistant: fait` avec `traite: AAAA-MM-JJ`. Les notes à traiter apparaissent dans « Aujourd'hui » et dans le compteur du bloc d'état.
 
+## Discuter avec l'IA
+
+Bouton 💬 en haut (ou « Discuter avec l'IA » sur ordinateur) : une discussion avec Claude, en direct.
+
+- **Clé API** : à créer sur console.anthropic.com → API Keys, puis à saisir dans les réglages de Cerveau. Elle reste sur l'appareil, comme le jeton. Un plafond de dépense mensuel se règle sur la console.
+- **Modèle** : Haiku 5.5 par défaut (le plus économe), Sonnet 5.5 ou Opus 5.5 au choix dans les réglages.
+- **Ce que l'IA voit** : les titres des notes et les tâches ouvertes. Elle ouvre une note ou cherche dans les notes quand elle en a besoin.
+- **Ce qu'elle peut faire** : ranger une nouvelle note dans la Boîte (avec `source: IA` dans l'en-tête), seulement si tu le demandes. Elle ne modifie ni ne supprime aucune note.
+- **Coût** : affiché sous la discussion. La discussion reste sur l'appareil ; « Nouvelle discussion » repart de zéro (automatique après 6 h).
+- **◆ Analyser** sur un rendez-vous de l'agenda ouvre la discussion avec ce rendez-vous.
+
 ## Polices
 
 Les touches « HUD » utilisent Share Tech Mono et Orbitron (licence SIL Open Font License, fichiers dans `fonts/`), hébergées avec l'appli : aucune requête vers un service externe.

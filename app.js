@@ -51,6 +51,7 @@ const ICON = {
   journal: '<path d="M6 4h11a1 1 0 0 1 1 1v15H7a1 1 0 0 1-1-1z"/><path d="M6 17h12M10 8h5"/>',
   net: '<circle cx="6" cy="7" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="12" cy="17.5" r="2.5"/><path d="M7.2 8.7 10.6 15.4M16.9 7.7 13.3 15.3M8 6.8l8-.6"/>',
   review: '<path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v4.5h-4.5"/>',
+  chat: '<path d="M5 5.5h14a1 1 0 0 1 1 1V16a1 1 0 0 1-1 1h-7l-4.5 3.5V17H5a1 1 0 0 1-1-1V6.5a1 1 0 0 1 1-1z"/><path d="M9 11.2h.01M12 11.2h.01M15 11.2h.01"/>',
 };
 const ico = (n, size) => `<svg class="i" viewBox="0 0 24 24"${size ? ` style="width:${size}px;height:${size}px"` : ''} aria-hidden="true">${ICON[n]}</svg>`;
 
@@ -744,15 +745,16 @@ function shell() {
       <button class="nav" data-act="journal">${ico('journal', 18)}Journal du jour</button>
       <button class="nav" data-act="review">${ico('review', 18)}Revue de la semaine</button>
       <button class="nav" data-act="search">${ico('search', 18)}Rechercher<span class="c">/</span></button>
+      <button class="nav" data-act="chat">${ico('chat', 18)}Discuter avec l’IA</button>
       <div class="bottom"><span data-sync class="sync"></span><span data-synct style="flex:1"></span><button class="ib" data-act="settings" aria-label="Réglages">${ico('set')}</button></div>
     </aside>
     <main class="main"><div class="col">
       <header class="top"><div class="tt"><div class="kick" id="kick"></div><h1 id="ttl"></h1></div>
-        <div class="acts"><button class="ib net-b" data-act="reseau" aria-label="Vue réseau" title="Vue réseau">${ico('net')}</button><button class="ib" data-act="sync" aria-label="Synchroniser"><span data-sync class="sync"></span></button><button class="ib" data-act="search" aria-label="Rechercher">${ico('search')}</button><button class="ib" data-act="settings" aria-label="Réglages">${ico('set')}</button></div>
+        <div class="acts"><button class="ib" data-act="chat" aria-label="Discuter avec l’IA" title="Discuter avec l’IA">${ico('chat')}</button><button class="ib net-b" data-act="reseau" aria-label="Vue réseau" title="Vue réseau">${ico('net')}</button><button class="ib" data-act="sync" aria-label="Synchroniser"><span data-sync class="sync"></span></button><button class="ib" data-act="search" aria-label="Rechercher">${ico('search')}</button><button class="ib" data-act="settings" aria-label="Réglages">${ico('set')}</button></div>
       </header>
       <div id="view"></div>
       <nav class="apps" aria-label="Mes applis">${APPS.map(([n, e, u]) => `<a href="${u}" target="_blank" rel="noopener" title="${n}" aria-label="${n}">${e}</a>`).join('')}<a href="#" data-act="work" title="Lancer ma session de travail" aria-label="Lancer ma session de travail">🛠️</a></nav>
-      <p class="foot">Cerveau · v2.7.0</p>
+      <p class="foot">Cerveau · v2.8.0</p>
     </div></main>
     <nav class="tabs">
       <button data-view="today">${ico('today')}Aujourd’hui</button><button data-view="agenda">${ico('cal')}Agenda</button><button data-view="afaire">${ico('task')}À faire</button>
@@ -1136,7 +1138,7 @@ addEventListener('keydown', e => { if (e.key === 'Escape' && net && (!ov || ov.h
 
 /* ---------- Clics communs ---------- */
 const WORK_MSG = 'Traite mes demandes du Cerveau : les notes et les fils « à traiter », puis passe-les à « fait ».';
-const ACTS = { reseau: () => openNet(), settings: () => settings(), search: () => search(), journal: () => journal(), review: () => review(), newproj: () => newProject(), oldproj: () => oldProjects(), calguide: () => calGuide(), recap: () => recapDay(), loginlink: () => loginLinkSheet(), loginsetup: () => loginSetupSheet(), login: () => startLogin(), calhide: () => { UI.noCal = true; saveUI(); render(); }, calkey: () => settings('cal'), work: () => { if (!cfg.work) return settings('work'); navigator.clipboard?.writeText(WORK_MSG).then(() => toast('Message copié : colle-le et envoie'), () => {}); open(cfg.work, '_blank', 'noopener'); }, newnote: () => editNote(null), sync: () => ghReady() ? sync() : settings(), triall: () => { const b = buildIndex().box[0]; if (b) classify(b.path, true); } };
+const ACTS = { chat: () => chat(), reseau: () => openNet(), settings: () => settings(), search: () => search(), journal: () => journal(), review: () => review(), newproj: () => newProject(), oldproj: () => oldProjects(), calguide: () => calGuide(), recap: () => recapDay(), loginlink: () => loginLinkSheet(), loginsetup: () => loginSetupSheet(), login: () => startLogin(), calhide: () => { UI.noCal = true; saveUI(); render(); }, calkey: () => settings('cal'), work: () => { if (!cfg.work) return settings('work'); navigator.clipboard?.writeText(WORK_MSG).then(() => toast('Message copié : colle-le et envoie'), () => {}); open(cfg.work, '_blank', 'noopener'); }, newnote: () => editNote(null), sync: () => ghReady() ? sync() : settings(), triall: () => { const b = buildIndex().box[0]; if (b) classify(b.path, true); } };
 document.addEventListener('click', e => {
   const wl = e.target.closest('[data-wl]'); if (wl) { e.preventDefault(); return openWiki(wl.dataset.wl); }
   if (e.target.closest('a[target]')) return;
@@ -1635,6 +1637,122 @@ function search() {
   q.onkeydown = e => { if (e.key === 'Enter') { const f = $('[data-open]', out); if (f) openNote(f.dataset.open); } };
 }
 
+/* ---------- Discuter avec l'IA (API Claude, appelée depuis cet appareil avec ta clé) ----------
+   L'IA voit les titres des notes et les tâches ouvertes ; elle ouvre une note quand elle en a besoin
+   et peut seulement ranger une nouvelle note dans la Boîte. La conversation reste sur cet appareil. */
+// Prix en $ par million de jetons : entrée, sortie, lecture du cache (écriture du cache = 1,25 × entrée)
+const AI_MODELS = {
+  'claude-haiku-5-5': { n: 'Haiku 5.5 · très économe', i: 0.1, o: 0.5, r: 0.01 },
+  'claude-sonnet-5-5': { n: 'Sonnet 5.5 · équilibré', i: 2, o: 10, r: 0.1 },
+  'claude-opus-5-5': { n: 'Opus 5.5 · le plus capable', i: 4, o: 20, r: 0.2 },
+};
+const aiModel = () => AI_MODELS[cfg.aiModel] ? cfg.aiModel : 'claude-haiku-5-5';
+const aiCost = (u, m) => { const p = AI_MODELS[m]; return ((u.input_tokens || 0) * p.i + (u.cache_creation_input_tokens || 0) * p.i * 1.25 + (u.cache_read_input_tokens || 0) * p.r + (u.output_tokens || 0) * p.o) / 1e6; };
+const cents = d => (d * 100).toLocaleString('fr-FR', { maximumFractionDigits: d * 100 < 0.1 ? 3 : 2 }) + ' ¢';
+const AI_TOOLS = [
+  { name: 'lire_note', description: 'Lit le texte complet d’une note du Cerveau, à partir de son titre exact (tel qu’il apparaît dans la liste).', input_schema: { type: 'object', properties: { titre: { type: 'string' } }, required: ['titre'], additionalProperties: false } },
+  { name: 'chercher', description: 'Cherche un mot ou une expression dans les titres et le texte de toutes les notes. Renvoie les titres trouvés avec un extrait.', input_schema: { type: 'object', properties: { texte: { type: 'string' } }, required: ['texte'], additionalProperties: false } },
+  { name: 'ranger_dans_la_boite', description: 'Crée une nouvelle note dans la Boîte de réception d’Adrien (il la triera ensuite). Seulement quand il le demande ou l’accepte. Pour des tâches, écrire une ligne par tâche au format « - [ ] texte 📅 AAAA-MM-JJ » (date facultative).', input_schema: { type: 'object', properties: { titre: { type: 'string' }, texte: { type: 'string', description: 'Contenu Markdown de la note' } }, required: ['titre', 'texte'], additionalProperties: false } },
+];
+function aiSystem() {
+  const I = buildIndex(), K = k => KIND(k)?.short || k;
+  const list = I.idx.filter(x => x.kind !== 'fil').sort((a, b) => a.kind.localeCompare(b.kind) || byTitle(a, b)).map(x => `- ${x.title} (${K(x.kind)}${x.sub ? ' / ' + x.sub : ''}${x.dom ? ', ' + x.dom : ''})`).join('\n');
+  const open = I.tasks.filter(t => !t.done).sort((a, b) => (a.due || '9').localeCompare(b.due || '9')).slice(0, 80).map(t => `- ${plain(t.text)}${t.due ? ' 📅 ' + t.due : ''} [${t.note.title}]`).join('\n');
+  return `Tu es l’assistant du second cerveau d’Adrien (méthode PARA : Boîte, Projets, Domaines, Ressources, Archives, Journal). Réponds en français, simplement et brièvement, comme dans une discussion. Tutoie Adrien.
+Tu peux lire ses notes (lire_note, chercher) avant de répondre quand c’est utile. Tu ne peux pas modifier ni supprimer ses notes : pour garder une idée ou des tâches, propose de les ranger dans sa Boîte (ranger_dans_la_boite) et ne le fais que s’il est d’accord ou le demande.
+Nous sommes le ${frDate(today(), { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}.
+
+Ses notes (titre, dossier, domaine) :
+${list || '(aucune)'}
+
+Ses tâches ouvertes (avec la note où elles sont) :
+${open || '(aucune)'}`;
+}
+function aiTool(name, a) {
+  if (name === 'lire_note') {
+    const p = findByTitle(String(a.titre || '').replace(/^\[\[|\]\]$/g, ''));
+    if (!p) return { t: `Aucune note ne s’appelle « ${a.titre} ».`, err: true };
+    const tx = notes[p].text, MAX = 15000; // shortcut: une note plus longue est coupée pour limiter le coût
+    return { t: tx.length > MAX ? tx.slice(0, MAX) + `\n[… note coupée : ${tx.length - MAX} caractères de plus]` : tx, see: `a lu « ${titleOf(p)} »` };
+  }
+  if (name === 'chercher') {
+    const L = hits(String(a.texte || '')).slice(0, 15);
+    return { t: L.length ? L.map(x => `- ${x.title} : ${excerpt(x)}`).join('\n') : 'Rien trouvé.', see: `a cherché « ${a.texte} »` };
+  }
+  if (name === 'ranger_dans_la_boite') {
+    const p = createNote(uniquePath(dirOf('boite'), a.titre || firstLine(a.texte) || 'Note de l’IA'), build({ cree: today(), source: 'IA' }, String(a.texte || '').trim() + '\n'));
+    render(); return { t: `Note « ${titleOf(p)} » rangée dans la Boîte.`, see: `a rangé « ${titleOf(p)} » dans la Boîte`, path: p };
+  }
+  return { t: 'Outil inconnu.', err: true };
+}
+async function aiCall(conv) {
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-api-key': cfg.aiKey, 'anthropic-version': '2026-10-21', 'anthropic-dangerous-direct-browser-access': 'true' },
+    body: JSON.stringify({ model: conv.model, max_tokens: 8000, output_config: { effort: 'low' }, cache_control: { type: 'ephemeral' }, system: conv.sys, tools: AI_TOOLS, messages: conv.msgs }),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(r.status === 401 ? 'clé API refusée : vérifie-la dans les réglages' : r.status === 429 || r.status === 529 ? 'Claude est surchargé, réessaie dans un instant' : r.status === 400 && /credit/i.test(j.error?.message || '') ? 'crédit épuisé sur ton compte Anthropic' : (j.error?.message || 'erreur ' + r.status));
+  return j;
+}
+let chatBusy = false;
+function chat(pre = '') {
+  if (!cfg.aiKey) { toast('Saisis d’abord ta clé API Claude'); return settings('ai'); }
+  let conv = read('chat', null);
+  const fresh = () => ({ model: aiModel(), sys: aiSystem(), msgs: [], cost: 0, log: [], at: now() });
+  if (!conv || conv.model !== aiModel() || now() - (conv.at || 0) > 6 * 36e5) conv = fresh(); // un autre modèle = nouvelle discussion (la réflexion d’un modèle n’est pas relue par un autre)
+  const save = () => write('chat', conv);
+  const bubble = (who, html) => `<div class="msg ${who === 'ai' ? 'ai' : 'me'}"><div class="mh">${who === 'ai' ? '◆ IA' : 'Moi'}</div><div class="doc">${html}</div></div>`;
+  const draw = () => {
+    const M = $('#chM', pan); if (!M) return;
+    M.innerHTML = (conv.log.map(e => e.who === 'tool' ? `<p class="hint chtool">◆ ${esc(e.t)}${e.path ? ` · <a href="#" data-open="${esc(e.path)}">ouvrir</a>` : ''}</p>` : bubble(e.who, e.who === 'ai' ? md(e.t) : esc(e.t).replace(/\n/g, '<br>'))).join('') || '<p class="empty">Pose une question sur tes notes, tes projets, ta semaine…</p>')
+      + (chatBusy ? '<p class="hint chtool">◆ réfléchit…</p>' : '');
+    hydrate(M);
+    $('#chC', pan).textContent = conv.log.length ? `${AI_MODELS[conv.model].n.split(' ·')[0]} · cette discussion : ${cents(conv.cost)}` : AI_MODELS[conv.model].n;
+    const pb = $('.ov .pb'); if (pb) pb.scrollTop = pb.scrollHeight;
+  };
+  const pan = layer('Discuter avec l’IA', `
+    <div class="msgs" id="chM"></div>
+    <div class="composer"><textarea class="big" id="chT" rows="3" placeholder="Écris ta question…" style="min-height:80px;font-size:17px">${esc(pre)}</textarea>
+      <div class="btns"><button class="btn line" id="chN">Nouvelle discussion</button><button class="btn" id="chOk">Envoyer</button></div>
+      <p class="hint" id="chC" style="text-align:center;margin-top:8px"></p></div>`, { page: true });
+  draw();
+  const ta = $('#chT', pan); setTimeout(() => ta.focus(), 150);
+  ta.onkeydown = e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) $('#chOk', pan).click(); };
+  $('#chN', pan).onclick = () => { if (chatBusy) return; conv = fresh(); save(); draw(); ta.focus(); };
+  $('#chOk', pan).onclick = async () => {
+    const q = ta.value.trim(); if (!q || chatBusy) return;
+    if (!navigator.onLine) return toast('Pas de réseau');
+    ta.value = ''; chatBusy = true; $('#chOk', pan).disabled = true;
+    const keep = conv.msgs.length, keepLog = conv.log.length; conv.at = now();
+    conv.msgs.push({ role: 'user', content: q }); conv.log.push({ who: 'me', t: q }); draw();
+    try {
+      for (let round = 0; round < 8; round++) {
+        const j = await aiCall(conv);
+        conv.cost += aiCost(j.usage || {}, conv.model);
+        conv.msgs.push({ role: 'assistant', content: j.content }); // renvoyé tel quel (réflexion comprise) au tour suivant
+        const txt = j.content.filter(b => b.type === 'text').map(b => b.text).join('\n\n').trim();
+        if (j.stop_reason === 'refusal') { conv.log.push({ who: 'ai', t: txt || 'Je ne peux pas répondre à cette demande.' }); break; }
+        const uses = j.content.filter(b => b.type === 'tool_use');
+        if (txt) conv.log.push({ who: 'ai', t: txt + (j.stop_reason === 'max_tokens' ? '\n\n*(réponse coupée)*' : '') });
+        if (!uses.length) break;
+        const res = uses.map(u => { const r = aiTool(u.name, u.input || {}); if (r.see) conv.log.push({ who: 'tool', t: r.see, path: r.path }); return { type: 'tool_result', tool_use_id: u.id, content: r.t, ...(r.err ? { is_error: true } : {}) }; });
+        conv.msgs.push({ role: 'user', content: res }); save(); draw();
+      }
+      // si la boucle s'arrête sur des outils sans réponse, on retire ce tour incomplet pour que la suite reste valide
+      if (conv.msgs.at(-1)?.role === 'user' && Array.isArray(conv.msgs.at(-1).content)) conv.msgs.push({ role: 'assistant', content: [{ type: 'text', text: '(arrêt : trop d’étapes)' }] });
+    } catch (e) {
+      conv.msgs.length = keep; conv.log.length = keepLog; conv.log.push({ who: 'tool', t: '✗ ' + e.message }); ta.value = q;
+    }
+    chatBusy = false; save(); draw(); const b = $('#chOk', pan); if (b) b.disabled = false;
+  };
+}
+// « ◆ Analyser » sur un rendez-vous de l'agenda : ouvre la discussion avec le rendez-vous (titre déchiffré sur cet appareil)
+function analyseEvent(id) {
+  const e = calEvents().find(x => x.id === id), t = calPlain[id]; if (!e || !t) return;
+  chat(`Aide-moi à préparer ce rendez-vous : « ${t} », ${frDate(e.s.slice(0, 10), { weekday: 'long', day: 'numeric', month: 'long' })}${e.ad ? '' : ' à ' + e.s.slice(11, 16).replace(':', 'h')}.`);
+}
+
 /* ---------- Réglages ---------- */
 /* ---------- Notifications : abonnement de cet appareil (Web Push), envoyées par l'automate GitHub ---------- */
 async function enablePush(msg) {
@@ -1802,6 +1920,10 @@ function settings(focus) {
     <span class="sub" style="margin-top:16px">Agenda Google</span>
     ${f('sC', 'Clé de l’agenda (reste sur cet appareil)', cfg.calKey || '', 'type="password" autocomplete="off" placeholder="la même que CAL_KEY dans GitHub"')}
     <button type="button" class="btn sm line" data-act="calguide" style="margin:-6px 0 12px">Comment relier mon agenda ?</button>
+    <span class="sub" style="margin-top:6px">Discuter avec l’IA</span>
+    ${f('sA', 'Clé API Claude (reste sur cet appareil)', cfg.aiKey || '', 'type="password" autocomplete="off" placeholder="sk-ant-…"')}
+    <div class="fld"><label for="sAM">Modèle</label><select id="sAM">${Object.entries(AI_MODELS).map(([k, m]) => `<option value="${k}" ${aiModel() === k ? 'selected' : ''}>${m.n}</option>`).join('')}</select></div>
+    <p class="hint" style="margin:-6px 0 14px">Clé à créer sur console.anthropic.com → API Keys. Fixe-y un plafond de dépense mensuel.</p>
     <span class="sub" style="margin-top:6px">Session de travail</span>
     ${f('sW', 'Lien ouvert par 🛠️ en bas de page (reste sur cet appareil)', cfg.work || '', 'type="url" autocapitalize="off" placeholder="https://…"')}
     <span class="sub" style="margin-top:6px">Notifications</span>
@@ -1815,12 +1937,13 @@ function settings(focus) {
   $('#sPush', pan).onclick = () => enablePush(t => { $('#sMsg', pan).textContent = t; toast(t); });
   $('#sKeys', pan).onclick = () => makePushKeys($('#sKeyBox', pan)).catch(e => toast('✗ ' + e.message));
   if (focus === 'work') setTimeout(() => { $('#sW', pan).scrollIntoView({ block: 'center' }); $('#sW', pan).focus(); }, 200);
+  if (focus === 'ai') setTimeout(() => { $('#sA', pan).scrollIntoView({ block: 'center' }); $('#sA', pan).focus(); }, 200);
   if (focus === 'cal') setTimeout(() => { $('#sC', pan).scrollIntoView({ block: 'center' }); $('#sC', pan).focus(); }, 200);
   const val = id => $('#' + id, pan).value.trim();
   const collect = () => {
     const changedRepo = val('sO') !== cfg.owner || val('sR') !== cfg.repo || (val('sB') || 'main') !== cfg.branch || val('sD') !== cfg.root;
     if (val('sC') !== (cfg.calKey || '')) calPlain = {};
-    Object.assign(cfg, { owner: val('sO'), repo: val('sR'), branch: val('sB') || 'main', root: val('sD').replace(/^\/+|\/+$/g, ''), token: val('sK'), calKey: val('sC'), work: val('sW'), theme: getTh() || 'auto' });
+    Object.assign(cfg, { owner: val('sO'), repo: val('sR'), branch: val('sB') || 'main', root: val('sD').replace(/^\/+|\/+$/g, ''), token: val('sK'), calKey: val('sC'), aiKey: val('sA'), aiModel: $('#sAM', pan).value, work: val('sW'), theme: getTh() || 'auto' });
     saveCfg(); applyTheme();
     if (changedRepo) { notes = {}; Object.assign(meta, { head: null, tree: null, treeSha: null, last: 0, deleted: {}, seeded: false }); persist(); }
   };
