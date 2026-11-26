@@ -95,6 +95,7 @@ Les réponses s'écrivent sur la ligne `=>` (retours à la ligne notés ` ⏎ `)
 ## Organisation de l'appli (v2)
 
 - **Aujourd'hui** : bloc d'état, pastilles des autres applis (menu de Violette, projets PhantStudio), agenda du jour, ce qui est à faire aujourd'hui, boîte à trier, projets en cours.
+- **Agenda** : les 3 prochaines semaines jour par jour (rendez-vous Google, tâches datées, échéances de projets). Bouton « Récap day » sur l'accueil : rendez-vous, choses à faire et échéances du jour, à copier.
 - **À faire** : uniquement des actions à cocher, **par date** ou **par projet** (et domaines), plus l'historique des tâches faites.
 - **Boîte** : ce qui a été capturé et attend d'être trié.
 - **Notes** : ce qu'on garde (idées, ressources, domaines, notes de projets, journal, archives).
@@ -110,7 +111,7 @@ Les réponses s'écrivent sur la ligne `=>` (retours à la ligne notés ` ⏎ `)
 Un automate GitHub Actions du dépôt privé (`.github/workflows/cerveau.yml`) tourne 4 fois par jour (7 h 43, 12 h 13, 17 h 13 et 21 h 13, heure de Paris en hiver) :
 
 1. il lit l'adresse iCal secrète de l'agenda (secret `CAL_ICS_URL`), ne garde que **titre et heure** (jamais lieu, description ni invités), **chiffre les titres** (AES-GCM, clé `CAL_KEY`) et écrit `JSON_AGENDA.json` ; la même clé est saisie dans les réglages de l'appli, sur chaque appareil, pour déchiffrer ;
-2. il envoie les notifications (Web Push, clé `VAPID_PRIVATE`) aux appareils abonnés (`JSON_PUSH.json`) : résumé du matin vers 7 h 45, et rappels `⏰ AAAA-MM-JJ HH:MM` ou rendez-vous seulement s'ils tombent près d'un passage. Pour un rappel à l'heure pile, l'automate copie aussi les tâches datées dans l'agenda Google « Cerveau » (secrets `GCAL_*`).
+2. il envoie les notifications (Web Push, clé `VAPID_PRIVATE`) aux appareils abonnés (`JSON_PUSH.json`) : résumé du matin vers 7 h 45, et rappels `⏰ AAAA-MM-JJ HH:MM` ou rendez-vous seulement s'ils tombent près d'un passage. L'automate copie aussi les projets en cours qui ont une échéance dans l'agenda Google « Cerveau » (un événement « journée » le jour de l'échéance ; secrets `GCAL_*`).
 
 « ◆ Analyser » sur un rendez-vous crée une note dans la boîte, confiée à l'assistant : c'est le seul moment où un titre est écrit en clair.
 

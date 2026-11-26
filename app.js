@@ -36,6 +36,7 @@ setInterval(() => { const c = document.querySelector('[data-clock]'); if (c) c.t
 const vibrate = () => { try { navigator.vibrate?.(8); } catch { } };
 
 const ICON = {
+  cal: '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/>',
   today: '<circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"/>',
   inbox: '<path d="M4 13l2.2-7.4A1.5 1.5 0 0 1 7.6 4.5h8.8a1.5 1.5 0 0 1 1.4 1.1L20 13v5.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5z"/><path d="M4 13h4.5l1.5 2.5h4l1.5-2.5H20"/>',
   proj: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4.2"/><circle cx="12" cy="12" r=".6"/>',
@@ -564,7 +565,7 @@ function toast(msg) {
    ========================================================== */
 const UI = read('ui', {}) || {};
 // Trois mondes bien séparés : ce qui est à FAIRE (cases à cocher), ce qui est à TRIER (boîte), ce qui est à GARDER (notes)
-const VIEWS = { today: "Aujourd'hui", afaire: 'À faire', boite: 'Boîte', notes: 'Notes' };
+const VIEWS = { today: "Aujourd'hui", agenda: 'Agenda', afaire: 'À faire', boite: 'Boîte', notes: 'Notes' };
 const ALIAS = { taches: ['afaire', 'date'], projets: ['afaire', 'projet'] };
 let view = VIEWS[UI.view] ? UI.view : 'today', todoMode = UI.todoMode || 'date';
 let sphere = UI.sphere || '', projFilter = 'actif', showDone = false, nq = '';
@@ -644,7 +645,7 @@ async function calKeyFor(salt, iter) {
 }
 async function decryptAgenda() {
   const a = ext['JSON_AGENDA.json']?.d; if (!a || !cfg.calKey || calBusy) return;
-  const todo = a.events.filter(e => !(e.id in calPlain) && e.s.slice(0, 10) >= addDays(today(), -1) && e.s.slice(0, 10) <= addDays(today(), 7)); if (!todo.length) return;
+  const todo = a.events.filter(e => !(e.id in calPlain) && e.s.slice(0, 10) >= addDays(today(), -1) && e.s.slice(0, 10) <= addDays(today(), 22)); if (!todo.length) return;
   calBusy = true;
   try {
     const key = await calKeyFor(a.salt, a.iter);
@@ -662,10 +663,51 @@ function agendaHTML() {
   const evs = a.events.filter(e => e.s.slice(0, 10) === today() || (e.ad && e.s <= today() && (e.e || e.s) > today())).sort((x, y) => (x.ad ? '0' : x.s).localeCompare(y.ad ? '0' : y.s));
   const tomorrow = a.events.filter(e => e.s.slice(0, 10) === addDays(today(), 1)).length;
   if (cfg.calKey) decryptAgenda();
-  const now = new Date().toTimeString().slice(0, 5);
-  const row = e => { const t = cfg.calKey ? calPlain[e.id] : undefined, past = !e.ad && (e.e || e.s).slice(11, 16) < now;
-    return `<div class="row ev ${past ? 'past' : ''}"><span class="evt">${evTime(e)}${!e.ad && e.e ? `<small>${e.e.slice(11, 16).replace(':', 'h')}</small>` : ''}</span><span class="m"><span class="t">${t ? esc(t) : t === null ? '<span class="lock">🔒 Clé de l’agenda incorrecte</span>' : `<span class="lock">🔒 ${cfg.calKey ? 'déchiffrement…' : 'Titre chiffré'}</span>`}</span></span>${t ? `<button class="btn sm line askbtn" data-cal="${esc(e.id)}">◆ Analyser</button>` : ''}</div>`; };
-  return lbl(`Agenda du jour${evs.length ? ' · ' + evs.length : ''}`, cfg.calKey ? '' : 'Saisir la clé', 'calkey') + `<div class="list">${evs.length ? evs.map(row).join('') : '<p class="empty">Aucun rendez-vous aujourd’hui.</p>'}</div>${tomorrow ? `<p class="hint cal-tm">Demain : ${plural(tomorrow, 'rendez-vous', 'rendez-vous')}</p>` : ''}`;
+  return lbl(`Agenda du jour${evs.length ? ' · ' + evs.length : ''}`, cfg.calKey ? '' : 'Saisir la clé', 'calkey') + `<div class="list">${evs.length ? evs.map(e => evRow(e)).join('') : '<p class="empty">Aucun rendez-vous aujourd’hui.</p>'}</div>${tomorrow ? `<p class="hint cal-tm">Demain : ${plural(tomorrow, 'rendez-vous', 'rendez-vous')}</p>` : ''}`;
+}
+const calEvents = () => ext['JSON_AGENDA.json']?.d.events || [];
+const evOn = (e, d) => e.s.slice(0, 10) === d || (e.ad && e.s.slice(0, 10) <= d && (e.e || e.s).slice(0, 10) > d);
+const evSort = (x, y) => (x.ad ? '0' : x.s).localeCompare(y.ad ? '0' : y.s);
+function evRow(e, day = today()) {
+  const t = cfg.calKey ? calPlain[e.id] : undefined, past = day === today() && !e.ad && (e.e || e.s).slice(11, 16) < new Date().toTimeString().slice(0, 5);
+    return `<div class="row ev ${past ? 'past' : ''}"><span class="evt">${evTime(e)}${!e.ad && e.e ? `<small>${e.e.slice(11, 16).replace(':', 'h')}</small>` : ''}</span><span class="m"><span class="t">${t ? esc(t) : t === null ? '<span class="lock">🔒 Clé de l’agenda incorrecte</span>' : `<span class="lock">🔒 ${cfg.calKey ? 'déchiffrement…' : 'Titre chiffré'}</span>`}</span></span>${t ? `<button class="btn sm line askbtn" data-cal="${esc(e.id)}">◆ Analyser</button>` : ''}</div>`;
+}
+// Vue Agenda : 3 semaines, jour par jour : rendez-vous Google, tâches datées et échéances de projets
+function vAgenda(I) {
+  if (cfg.calKey) decryptAgenda();
+  const T = I.tasks.filter(t => !t.done && t.due && inS2(t)), P = I.projs.filter(p => (p.fm.statut || 'actif') === 'actif' && isISO(p.fm.echeance) && inS(p));
+  const late = T.filter(t => t.due < today());
+  let h = domsHTML() + (ext['JSON_AGENDA.json'] ? '' : agendaHTML());
+  if (late.length) h += lbl(`En retard · ${late.length}`, 'Tout voir', 'taches', 'bad') + `<div class="list">${late.slice(0, 5).map(t => taskRow(t)).join('')}</div>`;
+  let any = false;
+  for (let i = 0; i <= 21; i++) {
+    const d = addDays(today(), i), E = calEvents().filter(e => evOn(e, d)).sort(evSort), Td = T.filter(t => t.due === d), Pd = P.filter(p => p.fm.echeance === d);
+    if (!E.length && !Td.length && !Pd.length) continue;
+    any = true;
+    const name = i === 0 ? 'Aujourd’hui' : i === 1 ? 'Demain' : cap1(frDate(d, { weekday: 'long', day: 'numeric', month: 'long' }));
+    h += lbl(name) + `<div class="list">${E.map(e => evRow(e, d)).join('')}${Pd.map(projRow).join('')}${Td.map(t => taskRow(t)).join('')}</div>`;
+  }
+  if (!any) h += `<p class="empty">Rien de prévu dans les 3 prochaines semaines.</p>`;
+  if (ext['JSON_AGENDA.json'] && !cfg.calKey) h += `<div class="btns"><button class="btn line" data-act="calkey">Saisir la clé de l’agenda</button></div>`;
+  return h;
+}
+// « Récap day » : tout ce qui compte aujourd'hui, en un écran, à copier si besoin
+function recapDay() {
+  const I = buildIndex(), d = today(), E = calEvents().filter(e => evOn(e, d)).sort(evSort);
+  const T = I.tasks.filter(t => !t.done && t.due && t.due <= d && inS2(t)).sort((a, b) => a.due.localeCompare(b.due));
+  const P = I.projs.filter(p => (p.fm.statut || 'actif') === 'actif' && isISO(p.fm.echeance) && p.fm.echeance <= addDays(d, 7) && inS(p)).sort((a, b) => a.fm.echeance.localeCompare(b.fm.echeance));
+  const evTxt = e => `${e.ad ? 'Journée' : e.s.slice(11, 16).replace(':', 'h') + (e.e ? '–' + e.e.slice(11, 16).replace(':', 'h') : '')} · ${calPlain[e.id] || 'rendez-vous (titre chiffré)'}`;
+  const lines = [`Récap du ${frDate(d, { weekday: 'long', day: 'numeric', month: 'long' })}`, '', `Rendez-vous (${E.length})`, ...(E.length ? E.map(e => '• ' + evTxt(e)) : ['• aucun']),
+    '', `À faire (${T.length})`, ...(T.length ? T.map(t => `• ${plain(t.text)}${t.due < d ? ' (en retard)' : ''} · ${t.note.title}`) : ['• rien']),
+    ...(P.length ? ['', 'Échéances de projets (7 jours)', ...P.map(p => `• ${p.title} · ${frDate(p.fm.echeance, { weekday: 'short', day: 'numeric', month: 'short' })}`)] : [])];
+  const li = L => `<ul class="recap">${L.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`;
+  const sec = (t, L, empty) => lbl(t) + (L.length ? li(L) : `<p class="empty">${empty}</p>`);
+  layer('Récap day', `<p class="lead" style="margin-top:0">${esc(cap1(frDate(d, { weekday: 'long', day: 'numeric', month: 'long' })))} : <em>${plural(E.length, 'rendez-vous', 'rendez-vous')}</em>, ${plural(T.length, 'chose')} à faire.</p>`
+    + sec(`Rendez-vous · ${E.length}`, E.map(evTxt), 'Aucun rendez-vous aujourd’hui.')
+    + sec(`À faire · ${T.length}`, T.map(t => `${plain(t.text)}${t.due < d ? ' (en retard)' : ''} · ${t.note.title}`), 'Rien de prévu aujourd’hui.')
+    + (P.length ? sec('Échéances de projets · 7 jours', P.map(p => `${p.title} · ${frDate(p.fm.echeance, { weekday: 'short', day: 'numeric', month: 'short' })}`), '') : '')
+    + `<div class="btns"><button class="btn" id="rcCopy">Copier le récap</button></div>`);
+  $('#rcCopy').onclick = () => navigator.clipboard?.writeText(lines.join('\n')).then(() => toast('Récap copié'), () => {});
 }
 // « Analyser » : c'est toi qui décides de me montrer ce rendez-vous. Il part dans la boîte, confié à l'assistant.
 function analyseEvent(id) {
@@ -698,7 +740,7 @@ function shell() {
     <aside class="side">
       <div class="brand">${ring()}Cerveau</div><div class="kick">Second cerveau · PARA</div>
       <button class="btn capb" data-cap>${ico('plus', 18)} Capturer <span style="margin-left:auto;font:500 11px var(--mono);opacity:.6">N</span></button>
-      ${['today', 'afaire', 'boite', 'notes'].map(v => `<button class="nav" data-view="${v}">${ico({ today: 'today', boite: 'inbox', afaire: 'task', notes: 'notes' }[v], 18)}${VIEWS[v]}<span class="c" data-count="${v}"></span></button>`).join('')}
+      ${['today', 'agenda', 'afaire', 'boite', 'notes'].map(v => `<button class="nav" data-view="${v}">${ico({ today: 'today', agenda: 'cal', boite: 'inbox', afaire: 'task', notes: 'notes' }[v], 18)}${VIEWS[v]}<span class="c" data-count="${v}"></span></button>`).join('')}
       <div class="sep">Domaines</div>
       <div id="sideDoms"></div>
       <div class="sep">Outils</div>
@@ -713,10 +755,10 @@ function shell() {
       </header>
       <div id="view"></div>
       <nav class="apps" aria-label="Mes applis">${APPS.map(([n, e, u]) => `<a href="${u}" target="_blank" rel="noopener" title="${n}" aria-label="${n}">${e}</a>`).join('')}<a href="#" data-act="work" title="Lancer ma session de travail" aria-label="Lancer ma session de travail">🛠️</a></nav>
-      <p class="foot">Cerveau · v2.5.2</p>
+      <p class="foot">Cerveau · v2.6.0</p>
     </div></main>
     <nav class="tabs">
-      <button data-view="today">${ico('today')}Aujourd’hui</button><button data-view="afaire">${ico('task')}À faire</button>
+      <button data-view="today">${ico('today')}Aujourd’hui</button><button data-view="agenda">${ico('cal')}Agenda</button><button data-view="afaire">${ico('task')}À faire</button>
       <button class="cap" data-cap aria-label="Capturer">${ico('plus')}</button>
       <button data-view="boite">${ico('inbox')}Boîte<span class="bdg" id="bdg" hidden></span></button><button data-view="notes">${ico('notes')}Notes</button>
     </nav></div>`;
@@ -735,7 +777,7 @@ function render() {
   $$('[data-count]').forEach(el => el.textContent = counts[el.dataset.count] ?? '');
   $('#sideDoms').innerHTML = [['', 'Tout'], ...SPHERES.map(s => [s.id, s.id])].map(([k, l]) => `<button class="nav ${sphere === k ? 'on' : ''}" data-sph="${esc(k)}">${k ? dot(k) : '<span class="dot" style="--c:var(--ink)"></span>'}${esc(l)}</button>`).join('');
   $$('[data-view]').forEach(b => b.classList.toggle('on', b.dataset.view === view));
-  const html = { today: vToday, afaire: vAFaire, notes: vNotes, boite: vBoite }[view](I, late), vw = $('#view');
+  const html = { today: vToday, agenda: vAgenda, afaire: vAFaire, notes: vNotes, boite: vBoite }[view](I, late), vw = $('#view');
   if (html !== lastHTML) { vw.innerHTML = html; lastHTML = html; bindView(); hydrate(vw); }
   const clk = new Date().toLocaleTimeString('fr-FR'); $$('[data-clock]').forEach(c => c.textContent = clk);
   if (!splashing && boot && meta.last) { boot = false; bootFX($('#view')); }
@@ -805,6 +847,7 @@ function vToday(I, lateAll) {
   let h = domsHTML() + hud + `<p class="lead${typingDone ? '' : ' wait'}"><span class="pr">›</span>${lead}</p>`;
   h += todayPills(); // Violette, PhantStudio
   h += agendaHTML(); // rendez-vous du jour
+  h += `<div class="btns"><button class="btn line" data-act="recap">${ico('review', 16)} Récap day</button></div>`;
   const next = T.filter(t => t.due > today()).sort((a, b) => a.due.localeCompare(b.due))[0];
   h += lbl(`À faire aujourd’hui${late.length + tod.length ? ' · ' + (late.length + tod.length) : ''}`, 'Tout voir', 'taches') + (late.length || tod.length
     ? `<div class="list">${[...late, ...tod].slice(0, 6).map(t => taskRow(t)).join('')}</div>${late.length + tod.length > 6 ? `<button class="morebtn" data-go="taches">+ ${late.length + tod.length - 6} autres</button>` : ''}`
@@ -904,7 +947,7 @@ function bindView() {
 
 /* ---------- Clics communs ---------- */
 const WORK_MSG = 'Traite mes demandes du Cerveau : les notes et les fils « à traiter », puis passe-les à « fait ».';
-const ACTS = { settings: () => settings(), search: () => search(), journal: () => journal(), review: () => review(), newproj: () => newProject(), oldproj: () => oldProjects(), calguide: () => calGuide(), loginlink: () => loginLinkSheet(), loginsetup: () => loginSetupSheet(), login: () => startLogin(), calhide: () => { UI.noCal = true; saveUI(); render(); }, calkey: () => settings('cal'), work: () => { if (!cfg.work) return settings('work'); navigator.clipboard?.writeText(WORK_MSG).then(() => toast('Message copié : colle-le et envoie'), () => {}); open(cfg.work, '_blank', 'noopener'); }, newnote: () => editNote(null), sync: () => ghReady() ? sync() : settings(), triall: () => { const b = buildIndex().box[0]; if (b) classify(b.path, true); } };
+const ACTS = { settings: () => settings(), search: () => search(), journal: () => journal(), review: () => review(), newproj: () => newProject(), oldproj: () => oldProjects(), calguide: () => calGuide(), recap: () => recapDay(), loginlink: () => loginLinkSheet(), loginsetup: () => loginSetupSheet(), login: () => startLogin(), calhide: () => { UI.noCal = true; saveUI(); render(); }, calkey: () => settings('cal'), work: () => { if (!cfg.work) return settings('work'); navigator.clipboard?.writeText(WORK_MSG).then(() => toast('Message copié : colle-le et envoie'), () => {}); open(cfg.work, '_blank', 'noopener'); }, newnote: () => editNote(null), sync: () => ghReady() ? sync() : settings(), triall: () => { const b = buildIndex().box[0]; if (b) classify(b.path, true); } };
 document.addEventListener('click', e => {
   const wl = e.target.closest('[data-wl]'); if (wl) { e.preventDefault(); return openWiki(wl.dataset.wl); }
   if (e.target.closest('a[target]')) return;
@@ -1573,7 +1616,7 @@ function settings(focus) {
     <span class="sub" style="margin-top:6px">Session de travail</span>
     ${f('sW', 'Lien ouvert par 🛠️ en bas de page (reste sur cet appareil)', cfg.work || '', 'type="url" autocapitalize="off" placeholder="https://…"')}
     <span class="sub" style="margin-top:6px">Notifications</span>
-    <p class="hint" style="margin-top:0">Résumé du matin vers 7 h 45, même appli fermée. L’automate passe 4 fois par jour : pour un rappel ⏰ à l’heure pile, compte sur l’agenda Google « Cerveau ».</p>
+    <p class="hint" style="margin-top:0">Résumé du matin vers 7 h 45, même appli fermée. L’automate passe 4 fois par jour : un rappel ⏰ n’arrive que s’il tombe près d’un passage.</p>
     <div class="btns" style="margin:-2px 0 6px"><button type="button" class="btn line" id="sKeys">1 · Créer la clé (une fois)</button><button type="button" class="btn line" id="sPush">${UI.push ? '✓ 2 · Activées · réactiver' : '2 · Activer sur cet appareil'}</button></div><div id="sKeyBox" style="margin-bottom:14px"></div>
     <p class="hint" id="sMsg">Le jeton reste sur cet appareil. Tes notes sont de simples fichiers Markdown : tu peux aussi les ouvrir sur GitHub ou dans Obsidian.</p>
     <div class="btns"><button class="btn line" id="sTest">Tester</button><button class="btn" id="sOk">Enregistrer</button></div>
