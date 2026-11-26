@@ -668,54 +668,50 @@ function agendaHTML() {
 const calEvents = () => ext['JSON_AGENDA.json']?.d.events || [];
 const evOn = (e, d) => e.s.slice(0, 10) === d || (e.ad && e.s.slice(0, 10) <= d && (e.e || e.s).slice(0, 10) > d);
 const evSort = (x, y) => (x.ad ? '0' : x.s).localeCompare(y.ad ? '0' : y.s);
-function evRow(e, day = today()) {
+function evRow(e, day = today(), ask = true) {
   const t = cfg.calKey ? calPlain[e.id] : undefined, past = day === today() && !e.ad && (e.e || e.s).slice(11, 16) < new Date().toTimeString().slice(0, 5);
-    return `<div class="row ev ${past ? 'past' : ''}"><span class="evt">${evTime(e)}${!e.ad && e.e ? `<small>${e.e.slice(11, 16).replace(':', 'h')}</small>` : ''}</span><span class="m"><span class="t">${t ? esc(t) : t === null ? '<span class="lock">🔒 Clé de l’agenda incorrecte</span>' : `<span class="lock">🔒 ${cfg.calKey ? 'déchiffrement…' : 'Titre chiffré'}</span>`}</span></span>${t ? `<button class="btn sm line askbtn" data-cal="${esc(e.id)}">◆ Analyser</button>` : ''}</div>`;
+    return `<div class="row ev ${past ? 'past' : ''}"><span class="evt">${evTime(e)}${!e.ad && e.e ? `<small>${e.e.slice(11, 16).replace(':', 'h')}</small>` : ''}</span><span class="m"><span class="t">${t ? esc(t) : t === null ? '<span class="lock">🔒 Clé de l’agenda incorrecte</span>' : `<span class="lock">🔒 ${cfg.calKey ? 'déchiffrement…' : 'Titre chiffré'}</span>`}</span></span>${t && ask ? `<button class="btn sm line askbtn" data-cal="${esc(e.id)}">◆ Analyser</button>` : ''}</div>`;
 }
-// Vue Agenda : 3 semaines, jour par jour : rendez-vous Google, tâches datées et échéances de projets
+// Vue Agenda : 3 semaines, jour par jour : rendez-vous Google et échéances de projets (pas les tâches)
 function vAgenda(I) {
   if (cfg.calKey) decryptAgenda();
-  const T = I.tasks.filter(t => !t.done && t.due && inS2(t)), P = I.projs.filter(p => (p.fm.statut || 'actif') === 'actif' && isISO(p.fm.echeance) && inS(p));
-  const late = T.filter(t => t.due < today());
-  let h = domsHTML() + (ext['JSON_AGENDA.json'] ? '' : agendaHTML());
-  if (late.length) h += lbl(`En retard · ${late.length}`, 'Tout voir', 'taches', 'bad') + `<div class="list">${late.slice(0, 5).map(t => taskRow(t)).join('')}</div>`;
-  let any = false;
+  const P = I.projs.filter(p => (p.fm.statut || 'actif') === 'actif' && isISO(p.fm.echeance) && inS(p));
+  let h = domsHTML() + (ext['JSON_AGENDA.json'] ? '' : agendaHTML()), any = false;
   for (let i = 0; i <= 21; i++) {
-    const d = addDays(today(), i), E = calEvents().filter(e => evOn(e, d)).sort(evSort), Td = T.filter(t => t.due === d), Pd = P.filter(p => p.fm.echeance === d);
-    if (!E.length && !Td.length && !Pd.length) continue;
+    const d = addDays(today(), i), E = calEvents().filter(e => evOn(e, d)).sort(evSort), Pd = P.filter(p => p.fm.echeance === d);
+    if (!E.length && !Pd.length) continue;
     any = true;
-    const name = i === 0 ? 'Aujourd’hui' : i === 1 ? 'Demain' : cap1(frDate(d, { weekday: 'long', day: 'numeric', month: 'long' }));
-    h += lbl(name) + `<div class="list">${E.map(e => evRow(e, d)).join('')}${Pd.map(projRow).join('')}${Td.map(t => taskRow(t)).join('')}</div>`;
+    h += lbl(i === 0 ? 'Aujourd’hui' : i === 1 ? 'Demain' : cap1(frDate(d, { weekday: 'long', day: 'numeric', month: 'long' }))) + `<div class="list">${E.map(e => evRow(e, d, false)).join('')}${Pd.map(projRow).join('')}</div>`;
   }
   if (!any) h += `<p class="empty">Rien de prévu dans les 3 prochaines semaines.</p>`;
   if (ext['JSON_AGENDA.json'] && !cfg.calKey) h += `<div class="btns"><button class="btn line" data-act="calkey">Saisir la clé de l’agenda</button></div>`;
   return h;
 }
-// « Récap day » : tout ce qui compte aujourd'hui, en un écran, à copier si besoin
+// « Récap day » : popup HUD condensée, qui s'allume à l'ouverture
 function recapDay() {
-  const I = buildIndex(), d = today(), E = calEvents().filter(e => evOn(e, d)).sort(evSort);
-  const T = I.tasks.filter(t => !t.done && t.due && t.due <= d && inS2(t)).sort((a, b) => a.due.localeCompare(b.due));
+  const I = buildIndex(), d = today(), now = new Date().toTimeString().slice(0, 5), E = calEvents().filter(e => evOn(e, d)).sort(evSort);
+  const T = I.tasks.filter(t => !t.done && t.due && t.due <= d && inS2(t)).sort((a, b) => a.due.localeCompare(b.due)), late = T.filter(t => t.due < d).length;
   const P = I.projs.filter(p => (p.fm.statut || 'actif') === 'actif' && isISO(p.fm.echeance) && p.fm.echeance <= addDays(d, 7) && inS(p)).sort((a, b) => a.fm.echeance.localeCompare(b.fm.echeance));
-  const evTxt = e => `${e.ad ? 'Journée' : e.s.slice(11, 16).replace(':', 'h') + (e.e ? '–' + e.e.slice(11, 16).replace(':', 'h') : '')} · ${calPlain[e.id] || 'rendez-vous (titre chiffré)'}`;
-  const lines = [`Récap du ${frDate(d, { weekday: 'long', day: 'numeric', month: 'long' })}`, '', `Rendez-vous (${E.length})`, ...(E.length ? E.map(e => '• ' + evTxt(e)) : ['• aucun']),
-    '', `À faire (${T.length})`, ...(T.length ? T.map(t => `• ${plain(t.text)}${t.due < d ? ' (en retard)' : ''} · ${t.note.title}`) : ['• rien']),
-    ...(P.length ? ['', 'Échéances de projets (7 jours)', ...P.map(p => `• ${p.title} · ${frDate(p.fm.echeance, { weekday: 'short', day: 'numeric', month: 'short' })}`)] : [])];
-  const li = L => `<ul class="recap">${L.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`;
-  const sec = (t, L, empty) => lbl(t) + (L.length ? li(L) : `<p class="empty">${empty}</p>`);
-  layer('Récap day', `<p class="lead" style="margin-top:0">${esc(cap1(frDate(d, { weekday: 'long', day: 'numeric', month: 'long' })))} : <em>${plural(E.length, 'rendez-vous', 'rendez-vous')}</em>, ${plural(T.length, 'chose')} à faire.</p>`
-    + sec(`Rendez-vous · ${E.length}`, E.map(evTxt), 'Aucun rendez-vous aujourd’hui.')
-    + sec(`À faire · ${T.length}`, T.map(t => `${plain(t.text)}${t.due < d ? ' (en retard)' : ''} · ${t.note.title}`), 'Rien de prévu aujourd’hui.')
-    + (P.length ? sec('Échéances de projets · 7 jours', P.map(p => `${p.title} · ${frDate(p.fm.echeance, { weekday: 'short', day: 'numeric', month: 'short' })}`), '') : '')
-    + `<div class="btns"><button class="btn" id="rcCopy">Copier le récap</button></div>`);
-  $('#rcCopy').onclick = () => navigator.clipboard?.writeText(lines.join('\n')).then(() => toast('Récap copié'), () => {});
+  const hm = s => s.slice(11, 16).replace(':', 'h'), ttl = e => calPlain[e.id] || '🔒 titre chiffré';
+  const nxt = E.find(e => !e.ad && e.s.slice(11, 16) >= now);
+  const gauge = (n, l, hot) => `<span class="rc-g${hot && n ? ' hot' : ''}"><b>${String(n).padStart(2, '0')}</b>${l}</span>`;
+  const row = (a, b, cls = '') => `<li class="${cls}"><i>${a}</i><span>${esc(b)}</span></li>`;
+  const html = `<div class="rc-in brk" role="dialog" aria-modal="true" aria-label="Récap du jour">
+    <div class="rc-top">${ring()}<span class="rc-t">RÉCAP // ${esc(frDate(d, { weekday: 'short', day: '2-digit', month: '2-digit' }).toUpperCase())}</span><button class="rc-x" aria-label="Fermer">${ico('x')}</button></div>
+    <div class="rc-gs">${gauge(E.length, 'RDV')}${gauge(T.length, 'À faire')}${gauge(late, 'Retard', true)}${gauge(P.length, 'Projets 7j')}</div>
+    ${nxt ? `<p class="rc-next">▸ Prochain : <b>${esc(ttl(nxt))}</b> à ${hm(nxt.s)}</p>` : ''}
+    ${E.length ? `<ul class="rc-l">${E.map(e => row(e.ad ? 'JOUR' : hm(e.s), ttl(e), !e.ad && (e.e || e.s).slice(11, 16) < now ? 'past' : '')).join('')}</ul>` : '<p class="rc-e">Aucun rendez-vous</p>'}
+    ${T.length ? `<ul class="rc-l">${T.slice(0, 4).map(t => row(t.due < d ? '⚠' : '□', plain(t.text), t.due < d ? 'bad' : '')).join('')}${T.length > 4 ? `<li class="more"><i></i><span>+ ${T.length - 4} autres</span></li>` : ''}</ul>` : ''}
+    ${P.length ? `<ul class="rc-l">${P.map(p => row(frDate(p.fm.echeance, { day: '2-digit', month: '2-digit' }), '📁 ' + p.title)).join('')}</ul>` : ''}
+    <div class="rc-scan"></div></div>`;
+  const box = document.createElement('div'); box.className = 'rc'; box.innerHTML = html; document.body.appendChild(box);
+  const onKey = e => { if (e.key === 'Escape') close(); };
+  const close = () => { box.classList.add('out'); removeEventListener('keydown', onKey); setTimeout(() => box.remove(), 220); };
+  box.onclick = e => { if (e.target === box || e.target.closest('.rc-x')) close(); };
+  addEventListener('keydown', onKey);
+  vibrate(); decode($('.rc-t', box), 600, 150); $$('.rc-g b', box).forEach((b, i) => decode(b, 500, 250 + i * 90));
 }
-// « Analyser » : c'est toi qui décides de me montrer ce rendez-vous. Il part dans la boîte, confié à l'assistant.
-function analyseEvent(id) {
-  const e = ext['JSON_AGENDA.json']?.d.events.find(x => x.id === id), t = calPlain[id]; if (!e || !t) return;
-  const when = e.ad ? `le ${frDate(e.s.slice(0, 10), { weekday: 'long', day: 'numeric', month: 'long' })} (journée)` : `le ${frDate(e.s.slice(0, 10), { weekday: 'long', day: 'numeric', month: 'long' })} de ${e.s.slice(11, 16)} à ${(e.e || e.s).slice(11, 16)}`;
-  const p = createNote(uniquePath(dirOf('boite'), 'Préparer · ' + t.slice(0, 60)), build({ cree: today(), assistant: 'à traiter', consigne: 'Prépare ce rendez-vous : fais les liens avec mes notes et fais-moi un petit résumé avant', demande: today(), rdv: e.s.replace('T', ' ') }, `Rendez-vous : **${t}**\n${cap1(when)}.\n`));
-  toast('Confié à l’assistant ◆'); vibrate(); render(); openNote(p);
-}
+
 function calGuide() {
   layer('Relier Google Agenda', `<p class="lead" style="margin-top:0">Tes rendez-vous arrivent dans Cerveau <em>titre et heure seulement</em> : ni lieu, ni description, ni invités.</p>
     <ol class="guide">
@@ -755,13 +751,13 @@ function shell() {
       </header>
       <div id="view"></div>
       <nav class="apps" aria-label="Mes applis">${APPS.map(([n, e, u]) => `<a href="${u}" target="_blank" rel="noopener" title="${n}" aria-label="${n}">${e}</a>`).join('')}<a href="#" data-act="work" title="Lancer ma session de travail" aria-label="Lancer ma session de travail">🛠️</a></nav>
-      <p class="foot">Cerveau · v2.6.0</p>
+      <p class="foot">Cerveau · v2.6.1</p>
     </div></main>
     <nav class="tabs">
       <button data-view="today">${ico('today')}Aujourd’hui</button><button data-view="agenda">${ico('cal')}Agenda</button><button data-view="afaire">${ico('task')}À faire</button>
-      <button class="cap" data-cap aria-label="Capturer">${ico('plus')}</button>
       <button data-view="boite">${ico('inbox')}Boîte<span class="bdg" id="bdg" hidden></span></button><button data-view="notes">${ico('notes')}Notes</button>
-    </nav></div>`;
+    </nav>
+    <button class="fab" data-cap aria-label="Capturer">${ico('plus')}</button></div>`;
   const top = $('.top');
   addEventListener('scroll', () => top.classList.toggle('stuck', scrollY > 8), { passive: true });
 }

@@ -95,7 +95,7 @@ Les réponses s'écrivent sur la ligne `=>` (retours à la ligne notés ` ⏎ `)
 ## Organisation de l'appli (v2)
 
 - **Aujourd'hui** : bloc d'état, pastilles des autres applis (menu de Violette, projets PhantStudio), agenda du jour, ce qui est à faire aujourd'hui, boîte à trier, projets en cours.
-- **Agenda** : les 3 prochaines semaines jour par jour (rendez-vous Google, tâches datées, échéances de projets). Bouton « Récap day » sur l'accueil : rendez-vous, choses à faire et échéances du jour, à copier.
+- **Agenda** : les 3 prochaines semaines jour par jour, rendez-vous Google et échéances de projets seulement. Bouton « Récap day » sur l'accueil : popup condensée (rendez-vous, à faire, retards, projets de la semaine).
 - **À faire** : uniquement des actions à cocher, **par date** ou **par projet** (et domaines), plus l'historique des tâches faites.
 - **Boîte** : ce qui a été capturé et attend d'être trié.
 - **Notes** : ce qu'on garde (idées, ressources, domaines, notes de projets, journal, archives).
