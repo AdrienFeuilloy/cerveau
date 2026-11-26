@@ -64,6 +64,8 @@ Bouton 💬 en haut (ou « Discuter avec l'IA » sur ordinateur) : une discussio
 - **Ce que l'IA voit** : les titres des notes et les tâches ouvertes. Elle ouvre une note ou cherche dans les notes quand elle en a besoin.
 - **Ce qu'elle peut faire** : ranger une nouvelle note dans la Boîte (avec `source: IA` dans l'en-tête), seulement si tu le demandes. Elle ne modifie ni ne supprime aucune note.
 - **Coût** : affiché sous la discussion. La discussion reste sur l'appareil ; « Nouvelle discussion » repart de zéro (automatique après 6 h).
+- **Dans un fil de tâche** : bouton **◆ Réponse de l'IA**. L'IA lit la tâche, sa note et tout le fil, puis répond directement dans le fil (message `· assistant`). Le fil garde la discussion, sur tous les appareils.
+- **Dans une note ou un projet** : bouton **💬 En discuter avec l'IA**, qui ouvre la discussion avec la note jointe.
 - **◆ Analyser** sur un rendez-vous de l'agenda ouvre la discussion avec ce rendez-vous.
 
 ## Polices

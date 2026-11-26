@@ -754,7 +754,7 @@ function shell() {
       </header>
       <div id="view"></div>
       <nav class="apps" aria-label="Mes applis">${APPS.map(([n, e, u]) => `<a href="${u}" target="_blank" rel="noopener" title="${n}" aria-label="${n}">${e}</a>`).join('')}<a href="#" data-act="work" title="Lancer ma session de travail" aria-label="Lancer ma session de travail">🛠️</a></nav>
-      <p class="foot">Cerveau · v2.8.0</p>
+      <p class="foot">Cerveau · v2.9.0</p>
     </div></main>
     <nav class="tabs">
       <button data-view="today">${ico('today')}Aujourd’hui</button><button data-view="agenda">${ico('cal')}Agenda</button><button data-view="afaire">${ico('task')}À faire</button>
@@ -1353,7 +1353,7 @@ function openNote(path) {
     ${x.ask && x.fm.consigne ? `<div class="askbox"><span>◆ Consigne pour l’assistant</span>${esc(x.fm.consigne)}</div>` : ''}
     <div class="doc scan" id="nMd">${md(x.body, offset) || '<p class="empty">Note vide. Touche le crayon pour écrire.</p>'}</div>
     ${back.length ? lbl('Mentionnée dans') + `<div class="list">${back.map(noteRow).join('')}</div>` : ''}
-    <div class="btns" style="margin-top:26px">${x.kind === 'boite' ? '<button class="btn" id="nCl">Trier</button>' : ''}${['ressource', 'autre', 'boite', 'journal'].includes(x.kind) ? '<button class="btn line" id="nTk">✓ En faire une tâche</button>' : ''}<button class="btn line" id="nMv">Déplacer</button><button class="btn line askbtn" id="nAsk">◆ ${x.ask ? 'Consigne' : 'Confier à l’assistant'}</button>
+    <div class="btns" style="margin-top:26px">${x.kind === 'boite' ? '<button class="btn" id="nCl">Trier</button>' : ''}${['ressource', 'autre', 'boite', 'journal'].includes(x.kind) ? '<button class="btn line" id="nTk">✓ En faire une tâche</button>' : ''}<button class="btn line" id="nMv">Déplacer</button><button class="btn line askbtn" id="nChat">💬 En discuter avec l’IA</button><button class="btn line askbtn" id="nAsk">◆ ${x.ask ? 'Consigne' : 'Confier à l’assistant'}</button>
       ${isProj && x.fm.statut !== 'terminé' ? '<button class="btn line" id="nEnd">Projet terminé</button>' : ''}
       ${x.kind === 'archive' ? '<button class="btn line" id="nUn">Sortir des archives</button>' : x.kind !== 'boite' && !isProj ? '<button class="btn line" id="nArc">Archiver</button>' : ''}
       <button class="btn bad" id="nDel">Supprimer</button></div>
@@ -1374,6 +1374,7 @@ function openNote(path) {
   on('#nMv', () => moveSheet(path));
   on('#nTk', () => toTaskSheet(path));
   on('#nAsk', () => askSheet(path));
+  on('#nChat', () => chat('', path));
   on('#nEnd', () => { setFm(path, { statut: 'terminé', fini: today() }); const np = moveNote(path, uniquePath(dirOf('archive'), x.title)); vibrate(); toast('Bravo ! Projet rangé dans les archives'); render(); openNote(np); });
   on('#nArc', () => { const np = moveNote(path, uniquePath(dirOf('archive'), x.title)); toast('Archivé'); render(); openNote(np); });
   on('#nUn', () => { const k = x.fm.type === 'projet' ? 'projet' : x.fm.type === 'domaine' ? 'domaine' : 'ressource'; if (k === 'projet') setFm(path, { statut: 'actif', fini: undefined }); const np = moveNote(path, uniquePath(dirOf(k), x.title)); toast('Sorti des archives'); render(); openNote(np); });
@@ -1420,7 +1421,7 @@ function openThread(path, line, raw) {
     <div class="composer"><div class="capw"><textarea class="big" id="thT" rows="3" placeholder="Écris dans le fil…" style="min-height:90px;font-size:17px"></textarea><span class="tag"><i class="wv"><b></b><b></b><b></b><b></b><b></b><b></b><b></b></i>Écoute</span></div>
       <div class="thumbs" id="thI"></div><div class="chips" style="margin-top:6px"><button type="button" class="chip" id="thP">📷 Photo</button></div>
       <label class="askchk"><input type="checkbox" id="thA"> ◆ Demander à l’assistant <small>réponse ou questionnaire dans le fil</small></label>
-      <div class="btns"><button class="btn" id="thOk">Envoyer</button></div></div>`, { page: true });
+      <div class="btns">${cfg.aiKey ? '<button class="btn line askbtn" id="thAI">◆ Réponse de l’IA</button>' : ''}<button class="btn" id="thOk">Envoyer</button></div></div>`, { page: true });
   hydrate($('#thM', pan));
   if (tp) bindQz($('#thM', pan), tp, () => openThread(path, i, notes[path].text.split('\n')[i]));
   $('#thCk', pan).onclick = e => { const L = notes[path].text.split('\n'); if (toggleLine(path, i, L[i])) ping(e.currentTarget); render(); openThread(path, i, notes[path].text.split('\n')[i]); };
@@ -1429,10 +1430,12 @@ function openThread(path, line, raw) {
   const drawImgs = () => { $('#thI', pan).innerHTML = imgs.map((m, k) => `<span class="th"><img src="${m.url}" alt=""><button type="button" data-rm="${k}" aria-label="Retirer">×</button></span>`).join(''); };
   $('#thI', pan).onclick = e => { const b = e.target.closest('[data-rm]'); if (b) { imgs.splice(+b.dataset.rm, 1); drawImgs(); } };
   $('#thP', pan).onclick = () => { const f = document.createElement('input'); f.type = 'file'; f.accept = 'image/*'; f.multiple = true; f.onchange = async () => { for (const x of f.files) { const r = await shrink(x); imgs.push({ ...r, url: URL.createObjectURL(r.blob) }); } drawImgs(); }; f.click(); };
-  $('#thOk', pan).onclick = async () => {
-    let msg = $('#thT', pan).value.trim(); const ask = $('#thA', pan).checked;
-    if (!msg && !ask && !imgs.length) return toast('Écris quelque chose');
-    $('#thOk', pan).disabled = true;
+  const send = async ai => {
+    let msg = $('#thT', pan).value.trim(); const ask = !ai && $('#thA', pan).checked;
+    if (!msg && !ask && !ai && !imgs.length) return toast('Écris quelque chose');
+    if (ai && !navigator.onLine) return toast('Pas de réseau');
+    $$('#thOk, #thAI', pan).forEach(b => b.disabled = true);
+    if (ai) $('#thAI', pan).textContent = '◆ réfléchit…';
     for (let k = 0; k < imgs.length; k++) msg += `${msg ? '\n' : ''}![[${await addMedia(imgs[k].blob, imgs[k].ext, k + 1)}]]`;
     let fp = tp, L = notes[path].text.split('\n');
     if (!fp) {
@@ -1443,11 +1446,19 @@ function openThread(path, line, raw) {
     const cur = notes[fp].text.replace(/\s*$/, '\n');
     saveNote(fp, msg ? `${cur}\n### ${stampNow()} · moi\n${msg}\n` : cur);
     if (ask) setFm(fp, { assistant: 'à traiter', consigne: msg ? undefined : 'Réponds dans le fil', demande: today(), traite: undefined });
-    vibrate(); toast(ask ? 'Envoyé à l’assistant ◆' : 'Ajouté au fil'); render();
+    if (ai) {
+      const cut = t => t.length > 15000 ? t.slice(0, 15000) + '\n[… coupé]' : t;
+      const conv = { model: aiModel(), sys: aiSystem(), msgs: [{ role: 'user', content: `Fil de discussion sur la tâche « ${text} » de la note « ${parent.title} ».\n\nNote « ${parent.title} » :\n${cut(notes[path].text)}\n\nFil :\n${cut(parse(notes[fp].text).body)}\n\nRéponds au dernier message du fil, en restant sur cette tâche.` }], cost: 0 };
+      try { const r = await aiRun(conv); saveNote(fp, `${notes[fp].text.replace(/\s*$/, '\n')}\n### ${stampNow()} · assistant\n${r || '(pas de réponse)'}\n`); toast(`◆ Réponse de l’IA · ${cents(conv.cost)}`); }
+      catch (e) { toast('✗ ' + e.message); }
+    } else { vibrate(); toast(ask ? 'Envoyé à l’assistant ◆' : 'Ajouté au fil'); }
+    render();
     const L2 = notes[path].text.split('\n'), j = L2.findIndex(l => l.includes(text) && TASK.test(l));
     openThread(path, j < 0 ? i : j, L2[j < 0 ? i : j]);
     requestAnimationFrame(() => { const pb = $('.ov .pb'); if (pb) pb.scrollTop = pb.scrollHeight; });
   };
+  $('#thOk', pan).onclick = () => send(false);
+  if ($('#thAI', pan)) $('#thAI', pan).onclick = () => send(true);
 }
 
 /* ---------- Questionnaires : l'assistant les écrit dans un fil ou une note, tu réponds depuis l'appli ----------
@@ -1695,12 +1706,30 @@ async function aiCall(conv) {
   if (!r.ok) throw new Error(r.status === 401 ? 'clé API refusée : vérifie-la dans les réglages' : r.status === 429 || r.status === 529 ? 'Claude est surchargé, réessaie dans un instant' : r.status === 400 && /credit/i.test(j.error?.message || '') ? 'crédit épuisé sur ton compte Anthropic' : (j.error?.message || 'erreur ' + r.status));
   return j;
 }
+// Boucle avec les outils ; renvoie le texte final. log(e) reçoit chaque étape à afficher.
+async function aiRun(conv, log = () => { }) {
+  const out = [];
+  for (let round = 0; round < 8; round++) {
+    const j = await aiCall(conv);
+    conv.cost += aiCost(j.usage || {}, conv.model);
+    conv.msgs.push({ role: 'assistant', content: j.content }); // renvoyé tel quel (réflexion comprise) au tour suivant
+    const txt = j.content.filter(b => b.type === 'text').map(b => b.text).join('\n\n').trim();
+    if (j.stop_reason === 'refusal') { const t = txt || 'Je ne peux pas répondre à cette demande.'; out.push(t); log({ who: 'ai', t }); return out.join('\n\n'); }
+    const uses = j.content.filter(b => b.type === 'tool_use');
+    if (txt) { const t = txt + (j.stop_reason === 'max_tokens' ? '\n\n*(réponse coupée)*' : ''); out.push(t); log({ who: 'ai', t }); }
+    if (!uses.length) return out.join('\n\n');
+    conv.msgs.push({ role: 'user', content: uses.map(u => { const r = aiTool(u.name, u.input || {}); if (r.see) log({ who: 'tool', t: r.see, path: r.path }); return { type: 'tool_result', tool_use_id: u.id, content: r.t, ...(r.err ? { is_error: true } : {}) }; }) });
+  }
+  conv.msgs.push({ role: 'assistant', content: [{ type: 'text', text: '(arrêt : trop d’étapes)' }] }); // garde l'historique valide
+  return out.join('\n\n');
+}
 let chatBusy = false;
-function chat(pre = '') {
+function chat(pre = '', about = '') {
   if (!cfg.aiKey) { toast('Saisis d’abord ta clé API Claude'); return settings('ai'); }
   let conv = read('chat', null);
   const fresh = () => ({ model: aiModel(), sys: aiSystem(), msgs: [], cost: 0, log: [], at: now() });
-  if (!conv || conv.model !== aiModel() || now() - (conv.at || 0) > 6 * 36e5) conv = fresh(); // un autre modèle = nouvelle discussion (la réflexion d’un modèle n’est pas relue par un autre)
+  if (!conv || conv.model !== aiModel() || now() - (conv.at || 0) > 6 * 36e5 || (about && conv.about !== about)) conv = fresh();
+  if (about && !conv.msgs.length) { conv.about = about; conv.log = [{ who: 'tool', t: `discussion sur « ${titleOf(about)} »`, path: about }]; } // un autre modèle = nouvelle discussion (la réflexion d’un modèle n’est pas relue par un autre)
   const save = () => write('chat', conv);
   const bubble = (who, html) => `<div class="msg ${who === 'ai' ? 'ai' : 'me'}"><div class="mh">${who === 'ai' ? '◆ IA' : 'Moi'}</div><div class="doc">${html}</div></div>`;
   const draw = () => {
@@ -1725,22 +1754,10 @@ function chat(pre = '') {
     if (!navigator.onLine) return toast('Pas de réseau');
     ta.value = ''; chatBusy = true; $('#chOk', pan).disabled = true;
     const keep = conv.msgs.length, keepLog = conv.log.length; conv.at = now();
-    conv.msgs.push({ role: 'user', content: q }); conv.log.push({ who: 'me', t: q }); draw();
+    const ctx = conv.about && !conv.msgs.length && notes[conv.about] ? `À propos de ma note « ${titleOf(conv.about)} » :\n\n${notes[conv.about].text.slice(0, 15000)}\n\n---\n` : '';
+    conv.msgs.push({ role: 'user', content: ctx + q }); conv.log.push({ who: 'me', t: q }); draw();
     try {
-      for (let round = 0; round < 8; round++) {
-        const j = await aiCall(conv);
-        conv.cost += aiCost(j.usage || {}, conv.model);
-        conv.msgs.push({ role: 'assistant', content: j.content }); // renvoyé tel quel (réflexion comprise) au tour suivant
-        const txt = j.content.filter(b => b.type === 'text').map(b => b.text).join('\n\n').trim();
-        if (j.stop_reason === 'refusal') { conv.log.push({ who: 'ai', t: txt || 'Je ne peux pas répondre à cette demande.' }); break; }
-        const uses = j.content.filter(b => b.type === 'tool_use');
-        if (txt) conv.log.push({ who: 'ai', t: txt + (j.stop_reason === 'max_tokens' ? '\n\n*(réponse coupée)*' : '') });
-        if (!uses.length) break;
-        const res = uses.map(u => { const r = aiTool(u.name, u.input || {}); if (r.see) conv.log.push({ who: 'tool', t: r.see, path: r.path }); return { type: 'tool_result', tool_use_id: u.id, content: r.t, ...(r.err ? { is_error: true } : {}) }; });
-        conv.msgs.push({ role: 'user', content: res }); save(); draw();
-      }
-      // si la boucle s'arrête sur des outils sans réponse, on retire ce tour incomplet pour que la suite reste valide
-      if (conv.msgs.at(-1)?.role === 'user' && Array.isArray(conv.msgs.at(-1).content)) conv.msgs.push({ role: 'assistant', content: [{ type: 'text', text: '(arrêt : trop d’étapes)' }] });
+      await aiRun(conv, e => { conv.log.push(e); save(); draw(); });
     } catch (e) {
       conv.msgs.length = keep; conv.log.length = keepLog; conv.log.push({ who: 'tool', t: '✗ ' + e.message }); ta.value = q;
     }
