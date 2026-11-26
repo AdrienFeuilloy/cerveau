@@ -682,7 +682,7 @@ function calGuide() {
       <li><b>Range les deux dans GitHub</b> (dépôt privé → Settings → Secrets and variables → Actions → New repository secret) : <code>CAL_ICS_URL</code> = l’adresse, <code>CAL_KEY</code> = la clé.</li>
       <li><b>Saisis la même clé ici</b>, dans les réglages de Cerveau, sur chaque appareil.</li>
     </ol>
-    <p class="hint">Toutes les 30 minutes (de 6 h à 22 h), GitHub lit ton agenda, garde titre et heure, chiffre les titres et les range dans ton dépôt. Sans la clé, personne ne peut les lire, moi compris. Tu choisis ce que tu me montres avec « Analyser ».</p>
+    <p class="hint">4 fois par jour (vers 7 h 45, 12 h 15, 17 h 15 et 21 h 15), GitHub lit ton agenda, garde titre et heure, chiffre les titres et les range dans ton dépôt. Sans la clé, personne ne peut les lire, moi compris. Tu choisis ce que tu me montres avec « Analyser ».</p>
     <div class="btns"><button class="btn" data-act="calkey">Saisir la clé</button></div>`);
 }
 
@@ -713,7 +713,7 @@ function shell() {
       </header>
       <div id="view"></div>
       <nav class="apps" aria-label="Mes applis">${APPS.map(([n, e, u]) => `<a href="${u}" target="_blank" rel="noopener" title="${n}" aria-label="${n}">${e}</a>`).join('')}<a href="#" data-act="work" title="Lancer ma session de travail" aria-label="Lancer ma session de travail">🛠️</a></nav>
-      <p class="foot">Cerveau · v2.5.1</p>
+      <p class="foot">Cerveau · v2.5.2</p>
     </div></main>
     <nav class="tabs">
       <button data-view="today">${ico('today')}Aujourd’hui</button><button data-view="afaire">${ico('task')}À faire</button>
@@ -1573,7 +1573,7 @@ function settings(focus) {
     <span class="sub" style="margin-top:6px">Session de travail</span>
     ${f('sW', 'Lien ouvert par 🛠️ en bas de page (reste sur cet appareil)', cfg.work || '', 'type="url" autocapitalize="off" placeholder="https://…"')}
     <span class="sub" style="margin-top:6px">Notifications</span>
-    <p class="hint" style="margin-top:0">Rappels ⏰, résumé du matin vers 8 h et rendez-vous imminents, même appli fermée (à 15–30 min près).</p>
+    <p class="hint" style="margin-top:0">Résumé du matin vers 7 h 45, même appli fermée. L’automate passe 4 fois par jour : pour un rappel ⏰ à l’heure pile, compte sur l’agenda Google « Cerveau ».</p>
     <div class="btns" style="margin:-2px 0 6px"><button type="button" class="btn line" id="sKeys">1 · Créer la clé (une fois)</button><button type="button" class="btn line" id="sPush">${UI.push ? '✓ 2 · Activées · réactiver' : '2 · Activer sur cet appareil'}</button></div><div id="sKeyBox" style="margin-bottom:14px"></div>
     <p class="hint" id="sMsg">Le jeton reste sur cet appareil. Tes notes sont de simples fichiers Markdown : tu peux aussi les ouvrir sur GitHub ou dans Obsidian.</p>
     <div class="btns"><button class="btn line" id="sTest">Tester</button><button class="btn" id="sOk">Enregistrer</button></div>

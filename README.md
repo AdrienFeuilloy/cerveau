@@ -107,10 +107,10 @@ Les réponses s'écrivent sur la ligne `=>` (retours à la ligne notés ` ⏎ `)
 
 ## Agenda Google et notifications
 
-Un automate GitHub Actions du dépôt privé (`.github/workflows/cerveau.yml`) tourne toutes les 30 minutes de 6 h à 22 h :
+Un automate GitHub Actions du dépôt privé (`.github/workflows/cerveau.yml`) tourne 4 fois par jour (7 h 43, 12 h 13, 17 h 13 et 21 h 13, heure de Paris en hiver) :
 
 1. il lit l'adresse iCal secrète de l'agenda (secret `CAL_ICS_URL`), ne garde que **titre et heure** (jamais lieu, description ni invités), **chiffre les titres** (AES-GCM, clé `CAL_KEY`) et écrit `JSON_AGENDA.json` ; la même clé est saisie dans les réglages de l'appli, sur chaque appareil, pour déchiffrer ;
-2. il envoie les notifications (Web Push, clé `VAPID_PRIVATE`) aux appareils abonnés (`JSON_PUSH.json`) : rappels `⏰ AAAA-MM-JJ HH:MM` écrits dans une tâche, résumé du matin vers 8 h, rendez-vous qui commencent dans les 45 minutes.
+2. il envoie les notifications (Web Push, clé `VAPID_PRIVATE`) aux appareils abonnés (`JSON_PUSH.json`) : résumé du matin vers 7 h 45, et rappels `⏰ AAAA-MM-JJ HH:MM` ou rendez-vous seulement s'ils tombent près d'un passage. Pour un rappel à l'heure pile, l'automate copie aussi les tâches datées dans l'agenda Google « Cerveau » (secrets `GCAL_*`).
 
 « ◆ Analyser » sur un rendez-vous crée une note dans la boîte, confiée à l'assistant : c'est le seul moment où un titre est écrit en clair.
 
