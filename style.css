@@ -619,3 +619,27 @@ html[data-theme="light"] .sp-glow{animation-name:spglowl}
 :root{--fam:#d23f8a}html[data-theme="dark"]{--fam:#ff86c4}
 .row.ev.fam{box-shadow:inset 3px 0 0 var(--fam);padding-left:10px}
 .evfam{display:inline-block;margin-top:2px;padding:0 6px;border-radius:4px;background:color-mix(in srgb,var(--fam) 14%,transparent);color:var(--fam);font:600 10px/1.6 var(--mono);letter-spacing:.1em;text-transform:uppercase}
+/* Vue réseau : plein écran au-dessus de l'appli, sous les calques (note, capture) */
+.net-b{opacity:.55}.net-b:hover{opacity:1;color:var(--hud)}
+.net{position:fixed;inset:0;z-index:55;background:var(--paper)}
+.net canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:grab;display:block}
+.net-top,.net-bot{position:absolute;left:max(16px,env(safe-area-inset-left,0px));right:max(16px,env(safe-area-inset-right,0px));display:flex;gap:10px;align-items:center;pointer-events:none}
+.net-top>*,.net-bot>*{pointer-events:auto}
+.net-top{top:calc(12px + var(--safe-t));justify-content:space-between}
+.net-bot{bottom:calc(14px + var(--safe-b));flex-wrap:wrap;justify-content:space-between}
+.net-st{display:flex;gap:16px;font:10px/1.3 var(--digital);letter-spacing:.12em;text-transform:uppercase;color:var(--mut)}
+.net-st span{display:flex;flex-direction:column;gap:2px}
+.net-st b{font:600 18px/1 var(--digital);color:var(--hud);text-shadow:0 0 8px var(--hud-glow);font-variant-numeric:tabular-nums}
+.net-lv{font:10.5px var(--digital);letter-spacing:.1em;text-transform:uppercase;color:var(--mut)}
+.net-lv b{color:var(--hud);font-weight:400}
+.net-btns{display:flex;gap:6px;flex-wrap:wrap}
+.net-btns .btn.line{background:var(--sheet)}
+.net-card{position:absolute;right:max(16px,env(safe-area-inset-right,0px));top:calc(64px + var(--safe-t));width:min(340px,calc(100% - 32px));max-height:calc(100% - 190px);overflow:auto;background:var(--sheet);border:1px solid var(--line);border-radius:14px;padding:14px 16px;box-shadow:0 18px 50px rgba(0,0,0,.18)}
+.net-card .kick{color:var(--hud)}
+.net-card h3{font:600 20px/1.2 var(--serif);margin:6px 0 4px}
+.net-meta{font:11px var(--mono);color:var(--mut);margin-bottom:8px}
+.net-nb{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.net-nb button{font-size:12px;border:1px solid var(--line);color:var(--ink2);border-radius:999px;padding:3px 10px}
+.net-nb button:hover{border-color:var(--hud);color:var(--hud)}
+.net-ca{display:flex;gap:8px;margin-top:12px}
+@media (max-width:640px){.net-card{top:auto;bottom:calc(120px + var(--safe-b));max-height:45%}}

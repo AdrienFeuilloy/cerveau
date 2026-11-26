@@ -49,6 +49,7 @@ const ICON = {
   x: '<path d="M6 6l12 12M18 6 6 18"/>',
   edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>',
   journal: '<path d="M6 4h11a1 1 0 0 1 1 1v15H7a1 1 0 0 1-1-1z"/><path d="M6 17h12M10 8h5"/>',
+  net: '<circle cx="6" cy="7" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="12" cy="17.5" r="2.5"/><path d="M7.2 8.7 10.6 15.4M16.9 7.7 13.3 15.3M8 6.8l8-.6"/>',
   review: '<path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v4.5h-4.5"/>',
 };
 const ico = (n, size) => `<svg class="i" viewBox="0 0 24 24"${size ? ` style="width:${size}px;height:${size}px"` : ''} aria-hidden="true">${ICON[n]}</svg>`;
@@ -747,11 +748,11 @@ function shell() {
     </aside>
     <main class="main"><div class="col">
       <header class="top"><div class="tt"><div class="kick" id="kick"></div><h1 id="ttl"></h1></div>
-        <div class="acts"><button class="ib" data-act="sync" aria-label="Synchroniser"><span data-sync class="sync"></span></button><button class="ib" data-act="search" aria-label="Rechercher">${ico('search')}</button><button class="ib" data-act="settings" aria-label="Réglages">${ico('set')}</button></div>
+        <div class="acts"><button class="ib net-b" data-act="reseau" aria-label="Vue réseau" title="Vue réseau">${ico('net')}</button><button class="ib" data-act="sync" aria-label="Synchroniser"><span data-sync class="sync"></span></button><button class="ib" data-act="search" aria-label="Rechercher">${ico('search')}</button><button class="ib" data-act="settings" aria-label="Réglages">${ico('set')}</button></div>
       </header>
       <div id="view"></div>
       <nav class="apps" aria-label="Mes applis">${APPS.map(([n, e, u]) => `<a href="${u}" target="_blank" rel="noopener" title="${n}" aria-label="${n}">${e}</a>`).join('')}<a href="#" data-act="work" title="Lancer ma session de travail" aria-label="Lancer ma session de travail">🛠️</a></nav>
-      <p class="foot">Cerveau · v2.6.2</p>
+      <p class="foot">Cerveau · v2.7.0</p>
     </div></main>
     <nav class="tabs">
       <button data-view="today">${ico('today')}Aujourd’hui</button><button data-view="agenda">${ico('cal')}Agenda</button><button data-view="afaire">${ico('task')}À faire</button>
@@ -779,6 +780,7 @@ function render() {
   if (!splashing && boot && meta.last) { boot = false; bootFX($('#view')); }
   if (!splashing && view === 'today' && !typingDone && meta.last && !$('.lead')?.dataset.t) typeLead(); // relance si l'écran a été redessiné en pleine frappe
   paint(sstate, serr);
+  net?.refresh(I);
   document.title = (I.box.length ? `(${I.box.length}) ` : '') + 'Cerveau';
 }
 // La phrase du jour s'écrit lettre par lettre, une seule fois à l'ouverture
@@ -941,9 +943,200 @@ function bindView() {
   }
 }
 
+/* ==========================================================
+   Vue réseau : chaque note est un neurone, les [[liens]] (et donc les fils) sont les synapses.
+   De loin les domaines, au milieu les notes, de près les tâches. Les notes nouvelles naissent en direct.
+   ========================================================== */
+let net = null;
+function openNet() {
+  if (net) return;
+  const el = document.createElement('div'); el.className = 'net';
+  el.innerHTML = `<canvas aria-label="Réseau des notes"></canvas>
+    <div class="net-top"><div class="net-st"><span><b data-nn>0</b>neurones</span><span><b data-nl>0</b>synapses</span><span><b data-nt>0</b>tâches</span></div>
+      <button class="ib" data-netx aria-label="Fermer la vue réseau">${ico('x')}</button></div>
+    <div class="net-bot"><span class="net-lv">Vue : <b data-nv>notes</b> · zoome pour voir les tâches</span>
+      <div class="net-btns"><button class="btn sm" data-cap>${ico('plus', 16)} Capturer</button><button class="btn sm line" data-netr>Rejouer</button><button class="btn sm line" data-netf>Recentrer</button></div></div>
+    <div class="net-card" hidden></div>`;
+  document.body.appendChild(el); document.body.style.overflow = 'hidden';
+  history.pushState({ net: 1 }, '');
+  const cv = $('canvas', el), ctx = cv.getContext('2d'), card = $('.net-card', el), reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const ANCH = { Perso: [-1, .55], Salarié: [1, .55], PhantStudio: [0, -1], '': [0, .15] };
+  const DAY = 864e5;
+  let N = [], L = [], C = {}, W = 0, H = 0, DPR = 1, cam = { x: 0, y: 0, k: 1 }, sel = null, hover = null, alive = true, fc = 0, first = true;
+  const pulses = [], pings = [];
+  const colors = () => {
+    const s = getComputedStyle(document.documentElement), g = v => s.getPropertyValue(v).trim();
+    C = { paper: g('--paper'), ink: g('--ink'), ink2: g('--ink2'), mut: g('--mut'), hud: g('--hud'), glow: g('--hud-glow'), Perso: g('--perso'), Salarié: g('--salarie'), PhantStudio: g('--phant'), '': g('--mut') };
+    C.kind = { boite: '#d9a300', projet: C.hud, domaine: C.ink, ressource: C.Salarié, fil: C.Perso, journal: C.PhantStudio, archive: C.mut };
+  };
+  const rgba = (c, a) => { const m = /^#([0-9a-f]{6})$/i.exec(c); if (!m) return c; const v = parseInt(m[1], 16); return `rgba(${v >> 16},${v >> 8 & 255},${v & 255},${a})`; };
+  const open = n => n.tasks.filter(t => !t.done).length;
+  const rad = n => n.hub ? 15 : 5 + Math.min(open(n), 5) * 1.6;
+  const level = () => cam.k < .55 ? 'domaines' : cam.k < 1.7 ? 'notes' : 'tâches';
+  const pos = d => { const a = ANCH[d] || ANCH['']; return [a[0] * 260 + (Math.random() - .5) * 120, a[1] * 230 + (Math.random() - .5) * 120]; };
+
+  // Reconstruit le réseau depuis les notes ; garde la place des neurones connus, fait naître les nouveaux
+  function refresh(I = buildIndex(), born = performance.now()) {
+    const old = new Map(N.map(n => [n.path, n])), oldL = new Set(L.map(l => l.key));
+    N = I.idx.map(x => {
+      let n = old.get(x.path);
+      if (!n) { const [px, py] = pos(x.dom); n = { path: x.path, x: px, y: py, vx: 0, vy: 0, born: first ? born - 9999 : born }; if (!first) pings.push({ n, t: born }); }
+      return Object.assign(n, { title: x.title, kind: x.kind, dom: x.dom, hub: x.kind === 'domaine', tasks: tasksOf(x), stamp: x.stamp, cree: Date.parse(x.fm.cree || '') || x.stamp });
+    });
+    const by = new Map(N.map(n => [n.path, n])), seen = new Set(); L = [];
+    const add = (a, b, weak) => { if (!a || !b || a === b) return; const key = [a.path, b.path].sort().join('|'); if (seen.has(key)) return; seen.add(key); L.push({ a, b, weak, key, born: oldL.has(key) || first ? born - 9999 : born }); };
+    for (const n of N) for (const m of notes[n.path].text.matchAll(/(?<!!)\[\[([^\]|#]+)/g)) add(n, by.get(findByTitle(m[1].trim())), false);
+    const hubs = Object.fromEntries(N.filter(n => n.hub).map(n => [n.title, n]));
+    for (const n of N) if (n.dom && !n.hub) add(n, hubs[n.dom], true);
+    first = false;
+  }
+  function step() {
+    for (const n of N) { const a = ANCH[n.dom] || ANCH['']; n.vx += (a[0] * 260 - n.x) * .0016; n.vy += (a[1] * 230 - n.y) * .0016; }
+    for (let i = 0; i < N.length; i++) for (let j = i + 1; j < N.length; j++) {
+      const a = N[i], b = N[j]; let dx = b.x - a.x, dy = b.y - a.y; const q = dx * dx + dy * dy || 1; if (q > 90000) continue;
+      const min = (rad(a) + rad(b)) * 3.2 + 26, f = Math.min(1600 / q, 2) + (q < min * min ? .08 : 0), dd = Math.sqrt(q);
+      dx /= dd; dy /= dd; a.vx -= dx * f; a.vy -= dy * f; b.vx += dx * f; b.vy += dy * f;
+    }
+    for (const l of L) {
+      const dx = l.b.x - l.a.x, dy = l.b.y - l.a.y, dd = Math.hypot(dx, dy) || 1, f = (dd - (l.weak ? 150 : 85)) * (l.weak ? .0018 : .006);
+      l.a.vx += dx / dd * f; l.a.vy += dy / dd * f; l.b.vx -= dx / dd * f; l.b.vy -= dy / dd * f;
+    }
+    for (const n of N) { if (n === drag?.node) { n.vx = n.vy = 0; continue; } n.vx *= .82; n.vy *= .82; n.x += n.vx; n.y += n.vy; }
+  }
+  const ease = t => t >= 1 ? 1 : 1 - Math.pow(2, -10 * t) * Math.cos(t * 7);
+  function draw(now) {
+    const k = cam.k;
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.fillStyle = C.paper; ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = rgba(C.hud, .06); ctx.lineWidth = 1; const gs = 60 * k, ox = (W / 2 - cam.x * k) % gs, oy = (H / 2 - cam.y * k) % gs;
+    ctx.beginPath(); for (let x = ox; x < W; x += gs) { ctx.moveTo(x, 0); ctx.lineTo(x, H); } for (let y = oy; y < H; y += gs) { ctx.moveTo(0, y); ctx.lineTo(W, y); } ctx.stroke();
+    ctx.setTransform(DPR * k, 0, 0, DPR * k, DPR * (W / 2 - cam.x * k), DPR * (H / 2 - cam.y * k));
+    // Régions des domaines, nommées de loin
+    const regA = Math.max(0, Math.min(1, (.8 - k) / .3));
+    for (const s of SPHERES) {
+      const ns = N.filter(n => n.dom === s.id); if (!ns.length) continue;
+      const cx = ns.reduce((a, n) => a + n.x, 0) / ns.length, cy = ns.reduce((a, n) => a + n.y, 0) / ns.length, r = 120 + Math.sqrt(ns.length) * 40, g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+      g.addColorStop(0, rgba(C[s.id], .16 * (.35 + regA))); g.addColorStop(1, rgba(C[s.id], 0)); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.fill();
+      if (regA > .02) {
+        ctx.globalAlpha = regA; ctx.textAlign = 'center'; ctx.fillStyle = C[s.id]; ctx.font = `700 ${15 / k}px Orbitron, monospace`; ctx.fillText(s.id.toUpperCase(), cx, cy - r * .2);
+        ctx.font = `${11 / k}px "Share Tech Mono", monospace`; ctx.fillStyle = C.mut; ctx.fillText(`${ns.length} NOTES · ${ns.reduce((a, n) => a + open(n), 0)} TÂCHES`, cx, cy - r * .2 + 17 / k); ctx.globalAlpha = 1;
+      }
+    }
+    for (const l of L) {
+      const g = Math.min(1, (now - l.born) / 700); if (g <= 0) continue;
+      const hot = sel && (l.a === sel || l.b === sel);
+      ctx.strokeStyle = hot ? C.hud : rgba(l.weak ? C.mut : C.ink2, l.weak ? .22 : .5); ctx.lineWidth = (hot ? 2 : l.weak ? .6 : 1.3) / Math.max(k, .6);
+      ctx.beginPath(); ctx.moveTo(l.a.x, l.a.y); ctx.lineTo(l.a.x + (l.b.x - l.a.x) * g, l.a.y + (l.b.y - l.a.y) * g); ctx.stroke();
+    }
+    if (!reduce && Math.random() < .08) { const s = L.filter(l => !l.weak); if (s.length) pulses.push({ l: s[Math.random() * s.length | 0], t: now, rev: Math.random() < .5 }); }
+    for (let i = pulses.length - 1; i >= 0; i--) {
+      const p = pulses[i], u = (now - p.t) / 1100; if (u > 1 || !N.includes(p.l.a)) { pulses.splice(i, 1); continue; }
+      const [a, b] = p.rev ? [p.l.b, p.l.a] : [p.l.a, p.l.b];
+      ctx.fillStyle = C.hud; ctx.shadowColor = C.glow; ctx.shadowBlur = 10; ctx.beginPath(); ctx.arc(a.x + (b.x - a.x) * u, a.y + (b.y - a.y) * u, 2.2 / Math.max(k, .7), 0, 7); ctx.fill(); ctx.shadowBlur = 0;
+    }
+    // Tâches en dendrites, de près
+    const tA = Math.max(0, Math.min(1, (k - 1.4) / .5));
+    if (tA > 0) for (const [ni, n] of N.entries()) {
+      const m = n.tasks.length, R = rad(n) + 26;
+      n.tasks.forEach((t, i) => {
+        const ang = -Math.PI / 2 + (i - (m - 1) / 2) * .62 + (ni % 7) * .9, c = Math.cos(ang), tx = n.x + c * R, ty = n.y + Math.sin(ang) * R;
+        ctx.globalAlpha = tA; ctx.strokeStyle = t.done ? rgba(C.mut, .5) : rgba(C.hud, .7); ctx.lineWidth = .8 / k;
+        ctx.beginPath(); ctx.moveTo(n.x, n.y); ctx.quadraticCurveTo(n.x + c * R * .5 + 6, n.y + Math.sin(ang) * R * .5 - 6, tx, ty); ctx.stroke();
+        ctx.fillStyle = t.done ? C.mut : C.hud; ctx.beginPath(); ctx.arc(tx, ty, 3 / Math.sqrt(k), 0, 7); ctx.fill();
+        if (k > 2.2) { const lab = (t.done ? '✓ ' : '') + plain(t.text); ctx.font = `${11 / k}px ${getComputedStyle(document.body).fontFamily}`; ctx.textAlign = c < -.2 ? 'right' : 'left'; ctx.fillStyle = t.done ? C.mut : C.ink2; ctx.fillText(lab.length > 48 ? lab.slice(0, 46) + '…' : lab, tx + (c < -.2 ? -6 : 6) / k, ty + 3.5 / k); }
+        ctx.globalAlpha = 1;
+      });
+    }
+    const lvl = level();
+    for (const [ni, n] of N.entries()) {
+      const age = (now - n.born) / 900; if (age < 0) continue;
+      const r = Math.max(0, rad(n) * ease(age)), col = C.kind[n.kind] || C.ink, fresh = Math.max(0, 1 - (Date.now() - n.stamp) / (6 * DAY)), br = reduce ? 0 : Math.sin(now / 900 + ni) * .5 + .5;
+      if (fresh > 0 || n === sel) { ctx.shadowColor = n === sel ? C.glow : rgba(col, .8); ctx.shadowBlur = (8 + 14 * fresh * (.6 + .4 * br)) * (n === sel ? 1.6 : 1); }
+      ctx.fillStyle = col; ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, 7); ctx.fill(); ctx.shadowBlur = 0;
+      if (n.hub) { ctx.strokeStyle = C.paper; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(n.x, n.y, r * .55, 0, 7); ctx.stroke(); }
+      if (n === sel || n === hover) { ctx.strokeStyle = C.hud; ctx.lineWidth = 1.4 / k; ctx.setLineDash([4 / k, 3 / k]); ctx.beginPath(); ctx.arc(n.x, n.y, r + 6 / k + 2, 0, 7); ctx.stroke(); ctx.setLineDash([]); }
+      if (n.hub ? k > .55 : lvl !== 'domaines' && (k > .85 || n === hover || n === sel || fresh > .5)) {
+        const lab = n.hub ? n.title.toUpperCase() : n.title.length > 34 && k < 2 ? n.title.slice(0, 32) + '…' : n.title, ly = n.y + r + 15 / k;
+        ctx.globalAlpha = Math.min(1, age); ctx.textAlign = 'center'; ctx.font = n.hub ? `700 ${12 / k}px Orbitron, monospace` : `${13 / k}px ${getComputedStyle(document.documentElement).getPropertyValue('--serif')}`;
+        ctx.lineWidth = 3 / k; ctx.strokeStyle = C.paper; ctx.strokeText(lab, n.x, ly); ctx.fillStyle = n === sel ? C.hud : C.ink; ctx.fillText(lab, n.x, ly); ctx.globalAlpha = 1;
+      }
+    }
+    for (let i = pings.length - 1; i >= 0; i--) {
+      const p = pings[i], u = (now - p.t) / 1400; if (u > 1) { pings.splice(i, 1); continue; }
+      ctx.strokeStyle = rgba(C.hud, 1 - u); ctx.lineWidth = 2 / k;
+      for (const o of [0, .3]) if (u > o) { ctx.beginPath(); ctx.arc(p.n.x, p.n.y, 8 + (u - o) * 90, 0, 7); ctx.stroke(); }
+    }
+  }
+  const nn = $('[data-nn]', el), nl = $('[data-nl]', el), nt = $('[data-nt]', el), nv = $('[data-nv]', el);
+  function frame(now) {
+    if (!alive) return;
+    if (!(fc++ % 30)) colors();
+    step(); draw(now);
+    const on = N.filter(n => n.born <= now);
+    nn.textContent = on.length; nl.textContent = L.filter(l => !l.weak && l.born <= now).length; nt.textContent = on.reduce((a, n) => a + open(n), 0); nv.textContent = level();
+    requestAnimationFrame(frame);
+  }
+  const size = () => { DPR = Math.min(devicePixelRatio || 1, 2); W = innerWidth; H = innerHeight; cv.width = W * DPR; cv.height = H * DPR; };
+  const toW = (sx, sy) => [(sx - W / 2) / cam.k + cam.x, (sy - H / 2) / cam.k + cam.y];
+  const zoomAt = (sx, sy, f) => { const [wx, wy] = toW(sx, sy); cam.k = Math.max(.25, Math.min(4.5, cam.k * f)); cam.x = wx - (sx - W / 2) / cam.k; cam.y = wy - (sy - H / 2) / cam.k; };
+  const pick = (sx, sy) => { const [x, y] = toW(sx, sy); let b = null, bd = 1e9; for (const n of N) { const q = Math.hypot(n.x - x, n.y - y); if (q < rad(n) + 10 / cam.k && q < bd) { bd = q; b = n; } } return b; };
+  function fit() {
+    if (!N.length) return; const xs = N.map(n => n.x), ys = N.map(n => n.y), w = Math.max(...xs) - Math.min(...xs) + 160, h = Math.max(...ys) - Math.min(...ys) + 240;
+    cam.k = Math.max(.3, Math.min(1.2, Math.min(W / w, H / h))); cam.x = (Math.max(...xs) + Math.min(...xs)) / 2; cam.y = (Math.max(...ys) + Math.min(...ys)) / 2;
+  }
+  // Déplacer, pincer, molette, toucher un neurone
+  const pts = new Map(); let drag = null, pinch = null;
+  cv.addEventListener('pointerdown', e => {
+    cv.setPointerCapture(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY]);
+    if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), k: cam.k }; drag = null; return; }
+    drag = { node: pick(e.clientX, e.clientY), sx: e.clientX, sy: e.clientY, cx: cam.x, cy: cam.y, moved: false };
+  });
+  cv.addEventListener('pointermove', e => {
+    if (!pts.has(e.pointerId)) { hover = pick(e.clientX, e.clientY); cv.style.cursor = hover ? 'pointer' : 'grab'; return; }
+    pts.set(e.pointerId, [e.clientX, e.clientY]);
+    if (pinch && pts.size === 2) { const [a, b] = [...pts.values()]; zoomAt((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, pinch.k * Math.hypot(a[0] - b[0], a[1] - b[1]) / pinch.d / cam.k); return; }
+    if (!drag) return; const dx = e.clientX - drag.sx, dy = e.clientY - drag.sy; if (Math.hypot(dx, dy) > 4) drag.moved = true;
+    if (drag.node) [drag.node.x, drag.node.y] = toW(e.clientX, e.clientY); else { cam.x = drag.cx - dx / cam.k; cam.y = drag.cy - dy / cam.k; }
+  });
+  const up = e => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null; if (drag && !drag.moved) { sel = drag.node; showCard(); } drag = null; };
+  cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+  cv.addEventListener('wheel', e => { e.preventDefault(); zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * .0015)); }, { passive: false });
+  // Fiche de la note touchée : cocher une tâche, ouvrir la note, sauter vers un voisin
+  function showCard() {
+    const n = sel; card.hidden = !n; if (!n) return;
+    const nb = L.filter(l => !l.weak && (l.a === n || l.b === n)).map(l => l.a === n ? l.b : l.a), o = open(n);
+    card.innerHTML = `<div class="kick">${esc(KIND(n.kind)?.short || 'Note')}${n.dom ? ' · ' + esc(n.dom) : ''}</div><h3>${esc(n.title)}</h3>
+      <div class="net-meta">${o} tâche${o > 1 ? 's' : ''} ouverte${o > 1 ? 's' : ''} · modifiée ${frDate(new Date(n.stamp).toISOString().slice(0, 10), { day: 'numeric', month: 'short' })}</div>
+      ${n.tasks.map((t, i) => `<div class="task ${t.done ? 'done' : ''}"><button class="ck" data-nk="${i}" aria-label="${t.done ? 'Rouvrir' : 'Cocher'}"></button><span class="tx">${inline(t.text)}</span></div>`).join('')}
+      ${nb.length ? `<div class="net-nb">${nb.map(m => `<button data-nj="${esc(m.path)}">↳ ${esc(m.title)}</button>`).join('')}</div>` : ''}
+      <div class="net-ca"><button class="btn sm" data-no>Ouvrir la note</button><button class="btn sm line" data-nc>Fermer</button></div>`;
+  }
+  card.addEventListener('click', e => {
+    const n = sel; if (!n) return; e.stopPropagation();
+    const ck = e.target.closest('[data-nk]'); if (ck) { const t = n.tasks[+ck.dataset.nk]; if (toggleLine(t.path, t.line, t.raw)) pings.push({ n, t: performance.now() }); render(); return showCard(); }
+    const j = e.target.closest('[data-nj]'); if (j) { sel = N.find(m => m.path === j.dataset.nj) || null; if (sel) { cam.x = sel.x; cam.y = sel.y; } return showCard(); }
+    if (e.target.closest('[data-no]')) return openNote(n.path);
+    if (e.target.closest('[data-nc]')) { sel = null; showCard(); }
+  });
+  $('[data-netx]', el).onclick = () => history.state?.net ? history.back() : close();
+  $('[data-netf]', el).onclick = fit;
+  $('[data-netr]', el).onclick = () => {
+    const t0 = performance.now(), order = [...N].sort((a, b) => a.cree - b.cree), step = Math.min(260, 9000 / (order.length || 1));
+    order.forEach((n, i) => { n.born = t0 + 300 + i * step; if (i % 3 === 0) setTimeout(() => alive && pings.push({ n, t: performance.now() }), 300 + i * step); });
+    for (const l of L) l.born = Math.max(l.a.born, l.b.born);
+    sel = null; showCard();
+  };
+  function close() { alive = false; removeEventListener('resize', size); el.remove(); document.body.style.overflow = ''; net = null; }
+  addEventListener('resize', size); size(); colors();
+  refresh(); for (let i = 0; i < 260; i++) step(); fit();
+  requestAnimationFrame(frame);
+  net = { refresh, close };
+}
+addEventListener('popstate', () => { if (net && !history.state?.net && (!ov || ov.hidden)) net.close(); });
+addEventListener('keydown', e => { if (e.key === 'Escape' && net && (!ov || ov.hidden)) history.state?.net ? history.back() : net.close(); });
+
 /* ---------- Clics communs ---------- */
 const WORK_MSG = 'Traite mes demandes du Cerveau : les notes et les fils « à traiter », puis passe-les à « fait ».';
-const ACTS = { settings: () => settings(), search: () => search(), journal: () => journal(), review: () => review(), newproj: () => newProject(), oldproj: () => oldProjects(), calguide: () => calGuide(), recap: () => recapDay(), loginlink: () => loginLinkSheet(), loginsetup: () => loginSetupSheet(), login: () => startLogin(), calhide: () => { UI.noCal = true; saveUI(); render(); }, calkey: () => settings('cal'), work: () => { if (!cfg.work) return settings('work'); navigator.clipboard?.writeText(WORK_MSG).then(() => toast('Message copié : colle-le et envoie'), () => {}); open(cfg.work, '_blank', 'noopener'); }, newnote: () => editNote(null), sync: () => ghReady() ? sync() : settings(), triall: () => { const b = buildIndex().box[0]; if (b) classify(b.path, true); } };
+const ACTS = { reseau: () => openNet(), settings: () => settings(), search: () => search(), journal: () => journal(), review: () => review(), newproj: () => newProject(), oldproj: () => oldProjects(), calguide: () => calGuide(), recap: () => recapDay(), loginlink: () => loginLinkSheet(), loginsetup: () => loginSetupSheet(), login: () => startLogin(), calhide: () => { UI.noCal = true; saveUI(); render(); }, calkey: () => settings('cal'), work: () => { if (!cfg.work) return settings('work'); navigator.clipboard?.writeText(WORK_MSG).then(() => toast('Message copié : colle-le et envoie'), () => {}); open(cfg.work, '_blank', 'noopener'); }, newnote: () => editNote(null), sync: () => ghReady() ? sync() : settings(), triall: () => { const b = buildIndex().box[0]; if (b) classify(b.path, true); } };
 document.addEventListener('click', e => {
   const wl = e.target.closest('[data-wl]'); if (wl) { e.preventDefault(); return openWiki(wl.dataset.wl); }
   if (e.target.closest('a[target]')) return;
