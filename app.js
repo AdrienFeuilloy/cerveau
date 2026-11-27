@@ -251,7 +251,7 @@ function hydrate(root) {
 const EXT_FILES = ['JSON_VIOLETTE.json', 'data.json', 'JSON_AGENDA.json'];
 const VIOLETTE_URL = 'https://adrienfeuilloy.github.io/Violette-app/violette.html', PHANT_URL = 'https://adrienfeuilloy.github.io/phant-studio-app/';
 const HUB = 'https://adrienfeuilloy.github.io/Violette-app/';
-const APPS = [['Hub Gestion quotidien', '🏠', HUB], ['Suivi Phant', '🎨', PHANT_URL], ['Site PhantStudio', '🌐', 'https://adrienfeuilloy.github.io/Phant-site/'], ['Ponctuel', '🧩', 'https://adrienfeuilloy.github.io/ponctuel/']];
+const APPS = [['Hub Gestion quotidien', '🏠', HUB], ['Suivi Phant', '🎨', PHANT_URL], ['Accueil Phant', '🖌️', 'https://adrienfeuilloy.github.io/phant-studio-app/accueil/'], ['Site PhantStudio', '🌐', 'https://adrienfeuilloy.github.io/Phant-site/'], ['Ponctuel', '🧩', 'https://adrienfeuilloy.github.io/ponctuel/']];
 let ext = read('ext', {}) || {};
 function slimExt(f, d) {
   if (f === 'JSON_VIOLETTE.json') return { plans: d.weeklyMealPlans || {}, meals: d.settings?.meals || {} };
@@ -754,7 +754,7 @@ function shell() {
       </header>
       <div id="view"></div>
       <nav class="apps" aria-label="Mes applis">${APPS.map(([n, e, u]) => `<a href="${u}" target="_blank" rel="noopener" title="${n}" aria-label="${n}">${e}</a>`).join('')}<a href="#" data-act="work" title="Lancer ma session de travail" aria-label="Lancer ma session de travail">🛠️</a></nav>
-      <p class="foot">Cerveau · v2.9.1</p>
+      <p class="foot">Cerveau · v2.9.2</p>
     </div></main>
     <nav class="tabs">
       <button data-view="today">${ico('today')}Aujourd’hui</button><button data-view="agenda">${ico('cal')}Agenda</button><button data-view="afaire">${ico('task')}À faire</button>
