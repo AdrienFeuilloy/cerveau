@@ -57,7 +57,7 @@ Traitement : la réponse est ajoutée sous `## Réponse de l'assistant`, puis l'
 
 ## Discuter avec l'IA
 
-Bouton 💬 en haut (ou « Discuter avec l'IA » sur ordinateur) : une discussion avec Claude, en direct.
+Bouton 💬 en haut (ou « Discuter avec l'IA » sur ordinateur) : une discussion avec Claude, en direct. Sans clé saisie, tous les boutons du chat sont masqués : il reste 🛠️ et « ◆ Confier à l'assistant ».
 
 - **Clé API** : à créer sur console.anthropic.com → API Keys, puis à saisir dans les réglages de Cerveau. Elle reste sur l'appareil, comme le jeton. Un plafond de dépense mensuel se règle sur la console.
 - **Modèle** : Haiku 5.5 par défaut (le plus économe), Sonnet 5.5 ou Opus 5.5 au choix dans les réglages.

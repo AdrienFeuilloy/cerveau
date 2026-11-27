@@ -672,7 +672,7 @@ const evOn = (e, d) => e.s.slice(0, 10) === d || (e.ad && e.s.slice(0, 10) <= d 
 const evSort = (x, y) => (x.ad ? '0' : x.s).localeCompare(y.ad ? '0' : y.s);
 function evRow(e, day = today(), ask = true) {
   const t = cfg.calKey ? calPlain[e.id] : undefined, past = day === today() && !e.ad && (e.e || e.s).slice(11, 16) < new Date().toTimeString().slice(0, 5);
-    return `<div class="row ev ${past ? 'past' : ''}${e.c ? ' fam' : ''}"><span class="evt">${evTime(e)}${!e.ad && e.e ? `<small>${e.e.slice(11, 16).replace(':', 'h')}</small>` : ''}</span><span class="m"><span class="t">${t ? esc(t) : t === null ? '<span class="lock">🔒 Clé de l’agenda incorrecte</span>' : `<span class="lock">🔒 ${cfg.calKey ? 'déchiffrement…' : 'Titre chiffré'}</span>`}</span>${e.c ? '<span class="evfam">Famille</span>' : ''}</span>${t && ask ? `<button class="btn sm line askbtn" data-cal="${esc(e.id)}">◆ Analyser</button>` : ''}</div>`;
+    return `<div class="row ev ${past ? 'past' : ''}${e.c ? ' fam' : ''}"><span class="evt">${evTime(e)}${!e.ad && e.e ? `<small>${e.e.slice(11, 16).replace(':', 'h')}</small>` : ''}</span><span class="m"><span class="t">${t ? esc(t) : t === null ? '<span class="lock">🔒 Clé de l’agenda incorrecte</span>' : `<span class="lock">🔒 ${cfg.calKey ? 'déchiffrement…' : 'Titre chiffré'}</span>`}</span>${e.c ? '<span class="evfam">Famille</span>' : ''}</span>${t && ask && cfg.aiKey ? `<button class="btn sm line askbtn" data-cal="${esc(e.id)}">◆ Analyser</button>` : ''}</div>`;
 }
 // Vue Agenda : 3 semaines, jour par jour : rendez-vous Google et échéances de projets (pas les tâches)
 function vAgenda(I) {
@@ -754,7 +754,7 @@ function shell() {
       </header>
       <div id="view"></div>
       <nav class="apps" aria-label="Mes applis">${APPS.map(([n, e, u]) => `<a href="${u}" target="_blank" rel="noopener" title="${n}" aria-label="${n}">${e}</a>`).join('')}<a href="#" data-act="work" title="Lancer ma session de travail" aria-label="Lancer ma session de travail">🛠️</a></nav>
-      <p class="foot">Cerveau · v2.9.0</p>
+      <p class="foot">Cerveau · v2.9.1</p>
     </div></main>
     <nav class="tabs">
       <button data-view="today">${ico('today')}Aujourd’hui</button><button data-view="agenda">${ico('cal')}Agenda</button><button data-view="afaire">${ico('task')}À faire</button>
@@ -782,6 +782,7 @@ function render() {
   if (!splashing && boot && meta.last) { boot = false; bootFX($('#view')); }
   if (!splashing && view === 'today' && !typingDone && meta.last && !$('.lead')?.dataset.t) typeLead(); // relance si l'écran a été redessiné en pleine frappe
   paint(sstate, serr);
+  $$('[data-act=chat]').forEach(b => b.hidden = !cfg.aiKey); // sans clé API, seul 🛠️ reste
   net?.refresh(I);
   document.title = (I.box.length ? `(${I.box.length}) ` : '') + 'Cerveau';
 }
@@ -1353,7 +1354,7 @@ function openNote(path) {
     ${x.ask && x.fm.consigne ? `<div class="askbox"><span>◆ Consigne pour l’assistant</span>${esc(x.fm.consigne)}</div>` : ''}
     <div class="doc scan" id="nMd">${md(x.body, offset) || '<p class="empty">Note vide. Touche le crayon pour écrire.</p>'}</div>
     ${back.length ? lbl('Mentionnée dans') + `<div class="list">${back.map(noteRow).join('')}</div>` : ''}
-    <div class="btns" style="margin-top:26px">${x.kind === 'boite' ? '<button class="btn" id="nCl">Trier</button>' : ''}${['ressource', 'autre', 'boite', 'journal'].includes(x.kind) ? '<button class="btn line" id="nTk">✓ En faire une tâche</button>' : ''}<button class="btn line" id="nMv">Déplacer</button><button class="btn line askbtn" id="nChat">💬 En discuter avec l’IA</button><button class="btn line askbtn" id="nAsk">◆ ${x.ask ? 'Consigne' : 'Confier à l’assistant'}</button>
+    <div class="btns" style="margin-top:26px">${x.kind === 'boite' ? '<button class="btn" id="nCl">Trier</button>' : ''}${['ressource', 'autre', 'boite', 'journal'].includes(x.kind) ? '<button class="btn line" id="nTk">✓ En faire une tâche</button>' : ''}<button class="btn line" id="nMv">Déplacer</button>${cfg.aiKey ? '<button class="btn line askbtn" id="nChat">💬 En discuter avec l’IA</button>' : ''}<button class="btn line askbtn" id="nAsk">◆ ${x.ask ? 'Consigne' : 'Confier à l’assistant'}</button>
       ${isProj && x.fm.statut !== 'terminé' ? '<button class="btn line" id="nEnd">Projet terminé</button>' : ''}
       ${x.kind === 'archive' ? '<button class="btn line" id="nUn">Sortir des archives</button>' : x.kind !== 'boite' && !isProj ? '<button class="btn line" id="nArc">Archiver</button>' : ''}
       <button class="btn bad" id="nDel">Supprimer</button></div>
