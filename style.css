@@ -644,3 +644,4 @@ html[data-theme="light"] .sp-glow{animation-name:spglowl}
 .net-nb button:hover{border-color:var(--hud);color:var(--hud)}
 .net-ca{display:flex;gap:8px;margin-top:12px}
 @media (max-width:640px){.net-card{top:auto;bottom:calc(120px + var(--safe-b));max-height:45%}}
+.ximg{display:inline-block;font:500 12px var(--mono);color:var(--mut)!important;border:1px dashed var(--line);border-radius:8px;padding:6px 10px;margin:4px 0;text-decoration:none!important}

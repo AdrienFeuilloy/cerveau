@@ -132,9 +132,15 @@ Un automate GitHub Actions du dépôt privé (`.github/workflows/cerveau.yml`) t
 
 **Login simple.** Réglages → « Activer le login » (depuis un appareil déjà relié) : on choisit un identifiant et un mot de passe propres à Cerveau (12 caractères ou plus). Le jeton (et, au choix, la clé de l'agenda) est chiffré avec eux (PBKDF2 600 000 itérations + AES-GCM) et publié dans `acces.json`, à la racine de ce dépôt. Seul le chiffré est public. Le jeton doit avoir accès en écriture au dépôt `cerveau` pour publier ce fichier. Sur un nouvel appareil, on ouvre l'appli, on saisit identifiant et mot de passe, c'est tout. Ce login ne connecte que Cerveau : les autres applis ont chacune le leur.
 
-**Lien de connexion (variante).** Même chiffrement, mais dans un lien `…/cerveau/#connexion=…` au lieu d'un fichier publié. La partie après `#` n'est jamais envoyée à un serveur.
+**Lien de connexion (variante).** Même chiffrement (12 caractères ou plus), mais dans un lien `…/cerveau/#connexion=…` au lieu d'un fichier publié. La partie après `#` n'est jamais envoyée à un serveur.
 
 En cas de nouveau jeton GitHub, réactiver le login (ou recréer le lien).
+
+## Sécurité de l'affichage
+
+- Une règle CSP (dans `index.html`) n'autorise que les scripts de l'appli, interdit le code dans les attributs et limite les connexions à api.github.com et api.anthropic.com.
+- Les images venant d'une adresse web ne s'affichent pas d'office : un clic pour les charger.
+- Test de la mise en forme des notes : `node --test tests/*.test.mjs`.
 
 ## Trois sortes de choses
 

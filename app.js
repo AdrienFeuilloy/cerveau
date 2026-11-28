@@ -489,21 +489,24 @@ function appendTo(path, { text, task, due }) {
 
 /* ---------- Affichage Markdown ---------- */
 function inline(s) {
-  let t = esc(s); const codes = [];
-  t = t.replace(/`([^`]+)`/g, (m, c) => `\u0000${codes.push(c) - 1}\u0000`)
+  // Images, liens et bouts de code sont mis de côté dès qu'ils sont fabriqués : les règles suivantes ne peuvent plus toucher leurs attributs.
+  const keep = [], put = h => `\u0000${keep.push(h) - 1}\u0000`, plain = a => a.replace(/\u0000(\d+)\u0000/g, (m, i) => plain(keep[i]).replace(/<[^>]*>/g, ''));
+  let t = esc(s).replace(/\u0000/g, '');
+  t = t.replace(/`([^`]+)`/g, (m, c) => put(`<code>${c}</code>`))
     .replace(/\s*🆔\s*[\w-]+/gu, '')
+    .replace(/!\[\[([^\]|]+)(?:\|[^\]]*)?\]\]/g, (m, a) => isImgName(unesc(a)) ? put(`<img class="att" data-att="${a.trim()}" alt="">`) : m)
+    .replace(/!\[([^\]]*)\]\(([^)\s\u0000]+)\)/g, (m, alt, u) => { alt = plain(alt); return put(/^https?:/.test(unesc(u)) ? `<a href="#" class="ximg" data-ximg="${u}" data-alt="${alt}">🖼️ ${alt || 'Image web'} · toucher pour l’afficher</a>` : `<img class="att" data-att="${esc((() => { try { return decodeURIComponent(unesc(u)); } catch { return unesc(u); } })().split('/').pop())}" alt="${alt}">`); })
+    .replace(/\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|([^\]]+))?\]\]/g, (m, a, b) => put(`<a href="#" data-wl="${a.trim()}" class="${findByTitle(unesc(a.trim())) ? '' : 'miss'}">${b || a}</a>`))
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s\u0000]+)\)/g, (m, x, u) => put(`<a href="${u}" target="_blank" rel="noopener">${x}</a>`))
+    .replace(/(^|[\s(])(https?:\/\/[^\s<)\u0000]+)/g, (m, p, u) => p + put(`<a href="${u}" target="_blank" rel="noopener">${u.length > 46 ? u.slice(0, 44) + '…' : u}</a>`))
     .replace(/⏰\s*(\d{4}-\d{2}-\d{2})[ T](\d{2}):(\d{2})/gu, (m, d, h, mi) => `<span class="due rem">⏰ ${d === today() ? '' : frDate(d, { day: 'numeric', month: 'short' }) + ' '}${h}h${mi}</span>`)
-    .replace(/!\[\[([^\]|]+)(?:\|[^\]]*)?\]\]/g, (m, a) => isImgName(unesc(a)) ? `<img class="att" data-att="${a.trim()}" alt="">` : m)
-    .replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (m, alt, u) => /^https?:/.test(unesc(u)) ? `<img class="att" src="${u}" alt="${alt}">` : `<img class="att" data-att="${(() => { try { return decodeURIComponent(unesc(u)); } catch { return unesc(u); } })().split('/').pop()}" alt="${alt}">`)
-    .replace(/\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|([^\]]+))?\]\]/g, (m, a, b) => `<a href="#" data-wl="${a.trim()}" class="${findByTitle(unesc(a.trim())) ? '' : 'miss'}">${b || a}</a>`)
-    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
-    .replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g, (m, p, u) => `${p}<a href="${u}" target="_blank" rel="noopener">${u.length > 46 ? u.slice(0, 44) + '…' : u}</a>`)
     .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/(^|[^*\w])\*([^*\s][^*]*?)\*(?!\w)/g, '$1<i>$2</i>')
     .replace(/==([^=]+)==/g, '<mark class="mark">$1</mark>')
     .replace(/(^|\s)#([\p{L}\p{N}_/-]+)/gu, '$1<span class="tg">#$2</span>')
     .replace(/📅\s*(\d{4}-\d{2}-\d{2})/gu, (m, d) => `<span class="due ${d < today() ? 'late' : ''}">→ ${dueLabel(d)}</span>`)
     .replace(/✅\s*(\d{4}-\d{2}-\d{2})/gu, (m, d) => `<span class="due">✓ ${frDate(d, { day: 'numeric', month: 'short' })}</span>`);
-  return t.replace(/\u0000(\d+)\u0000/g, (m, i) => `<code>${codes[i]}</code>`);
+  const back = x => x.replace(/\u0000(\d+)\u0000/g, (m, i) => back(keep[i]));
+  return back(t);
 }
 function md(src, offset = 0) {
   const L = src.split('\n'); let h = '', para = [], list = null, inQ = false;
@@ -754,7 +757,7 @@ function shell() {
       </header>
       <div id="view"></div>
       <nav class="apps" aria-label="Mes applis">${APPS.map(([n, e, u]) => `<a href="${u}" target="_blank" rel="noopener" title="${n}" aria-label="${n}">${e}</a>`).join('')}<a href="#" data-act="work" title="Lancer ma session de travail" aria-label="Lancer ma session de travail">🛠️</a></nav>
-      <p class="foot">Cerveau · v2.9.2</p>
+      <p class="foot">Cerveau · v2.9.3</p>
     </div></main>
     <nav class="tabs">
       <button data-view="today">${ico('today')}Aujourd’hui</button><button data-view="agenda">${ico('cal')}Agenda</button><button data-view="afaire">${ico('task')}À faire</button>
@@ -1141,6 +1144,7 @@ addEventListener('keydown', e => { if (e.key === 'Escape' && net && (!ov || ov.h
 const WORK_MSG = 'Traite mes demandes du Cerveau : les notes et les fils « à traiter », puis passe-les à « fait ».';
 const ACTS = { chat: () => chat(), reseau: () => openNet(), settings: () => settings(), search: () => search(), journal: () => journal(), review: () => review(), newproj: () => newProject(), oldproj: () => oldProjects(), calguide: () => calGuide(), recap: () => recapDay(), loginlink: () => loginLinkSheet(), loginsetup: () => loginSetupSheet(), login: () => startLogin(), calhide: () => { UI.noCal = true; saveUI(); render(); }, calkey: () => settings('cal'), work: () => { if (!cfg.work) return settings('work'); navigator.clipboard?.writeText(WORK_MSG).then(() => toast('Message copié : colle-le et envoie'), () => {}); open(cfg.work, '_blank', 'noopener'); }, newnote: () => editNote(null), sync: () => ghReady() ? sync() : settings(), triall: () => { const b = buildIndex().box[0]; if (b) classify(b.path, true); } };
 document.addEventListener('click', e => {
+  const xi = e.target.closest('[data-ximg]'); if (xi) { e.preventDefault(); const im = Object.assign(document.createElement('img'), { className: 'att', src: xi.dataset.ximg, alt: xi.dataset.alt, referrerPolicy: 'no-referrer' }); im.onclick = () => window.open(im.src, '_blank', 'noopener'); return xi.replaceWith(im); }
   const wl = e.target.closest('[data-wl]'); if (wl) { e.preventDefault(); return openWiki(wl.dataset.wl); }
   if (e.target.closest('a[target]')) return;
   const tm = e.target.closest('[data-tmenu]'); if (tm) { const t = TK[+tm.dataset.tmenu]; if (t) taskSheet(t); return; }
@@ -1903,14 +1907,14 @@ function loginLinkSheet() {
   if (!cfg.token) return toast('Relie d’abord ton dépôt dans les réglages');
   const pan = layer('Lien de connexion', `<p class="hint" style="margin-top:0">Choisis un identifiant et un mot de passe <b>propres à Cerveau</b> (pas ceux de GitHub). Ils chiffrent ton accès dans un lien : sur un nouvel appareil, ouvre le lien puis saisis-les.</p>
     <div class="fld"><label for="llI">Identifiant</label><input id="llI" autocomplete="username" autocapitalize="off" placeholder="ex. adrien"></div>
-    <div class="fld"><label for="llP">Mot de passe (10 caractères ou plus)</label><input id="llP" type="password" autocomplete="new-password"></div>
+    <div class="fld"><label for="llP">Mot de passe (12 caractères ou plus)</label><input id="llP" type="password" autocomplete="new-password"></div>
     <div class="fld"><label for="llP2">Confirmer le mot de passe</label><input id="llP2" type="password" autocomplete="new-password"></div>
     <label class="askchk" style="color:var(--ink2)"><input type="checkbox" id="llC" ${cfg.calKey ? 'checked' : 'disabled'}> Inclure la clé de l’agenda</label>
     <div class="btns"><button class="btn" id="llOk">Créer le lien</button></div><div id="llOut"></div>`);
   $('#llOk', pan).onclick = async () => {
     const id = $('#llI', pan).value.trim(), pw = $('#llP', pan).value, out = $('#llOut', pan);
     if (!id) return toast('Choisis un identifiant');
-    if (pw.length < 10) return toast('Mot de passe trop court (10 caractères minimum)');
+    if (pw.length < 12) return toast('Mot de passe trop court (12 caractères minimum)');
     if (pw !== $('#llP2', pan).value) return toast('Les deux mots de passe ne correspondent pas');
     $('#llOk', pan).disabled = true; out.innerHTML = '<div class="spin"></div>';
     const link = await makeLoginLink(id, pw, $('#llC', pan).checked);
