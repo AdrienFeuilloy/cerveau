@@ -590,6 +590,7 @@ function taskRow(t, ctx = true) {
 function taskSheet(t) {
   const pan = layer('Tâche', `<div class="fld"><label for="tsT">Tâche</label><input id="tsT" value="${esc(t.text)}"></div>
     <span class="sub">Échéance</span>${dueChips('tsDue', t.due)}
+    <div class="fld" style="margin-top:12px"><label for="tsR">Rappel ⏰ (heure, le jour de l’échéance ou aujourd’hui)</label><input id="tsR" type="time" value="${t.rem ? t.rem.slice(11, 16) : ''}"></div>
     <p class="hint">Dans « ${esc(t.note.title)} »</p>
     <div class="btns"><button class="btn" id="tsOk">Enregistrer</button><button class="btn line" id="tsTh">🧵 Ouvrir le fil</button></div>
     <div class="btns" style="margin-top:4px"><button class="btn bad" id="tsDel">Supprimer la tâche</button></div>`);
@@ -598,7 +599,8 @@ function taskSheet(t) {
   $('#tsOk', pan).onclick = () => {
     const [L, i] = locate(); if (i < 0) return;
     const m = TASK.exec(L[i]), rest = m[3], txt = $('#tsT', pan).value.replace(/\s+/g, ' ').trim() || t.text, due = getDue();
-    const keep = [...rest.matchAll(/(⏰\s*\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}|[✅⏳🛫]\s*\d{4}-\d{2}-\d{2}|🆔\s*[\w-]+)/gu)].map(x => x[0]);
+    const hr = $('#tsR', pan).value, keep = [...rest.matchAll(/([✅⏳🛫]\s*\d{4}-\d{2}-\d{2}|🆔\s*[\w-]+)/gu)].map(x => x[0]);
+    if (hr) keep.unshift(`⏰ ${due || t.rem.slice(0, 10) || today()} ${hr}`);
     L[i] = `${m[1]}- [${m[2]}] ${txt}${due ? ' 📅 ' + due : ''}${keep.length ? ' ' + keep.join(' ') : ''}`;
     saveNote(t.path, L.join('\n')); vibrate(); toast('Tâche modifiée'); closeLayer(() => render()); render();
   };
@@ -757,7 +759,7 @@ function shell() {
       </header>
       <div id="view"></div>
       <nav class="apps" aria-label="Mes applis">${APPS.map(([n, e, u]) => `<a href="${u}" target="_blank" rel="noopener" title="${n}" aria-label="${n}">${e}</a>`).join('')}<a href="#" data-act="work" title="Lancer ma session de travail" aria-label="Lancer ma session de travail">🛠️</a></nav>
-      <p class="foot">Cerveau · v2.9.4</p>
+      <p class="foot">Cerveau · v2.9.5</p>
     </div></main>
     <nav class="tabs">
       <button data-view="today">${ico('today')}Aujourd’hui</button><button data-view="agenda">${ico('cal')}Agenda</button><button data-view="afaire">${ico('task')}À faire</button>
