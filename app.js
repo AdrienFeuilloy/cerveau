@@ -749,17 +749,17 @@ function shell() {
       <div class="sep">Outils</div>
       <button class="nav" data-act="journal">${ico('journal', 18)}Journal du jour</button>
       <button class="nav" data-act="review">${ico('review', 18)}Revue de la semaine</button>
-      <button class="nav" data-act="search">${ico('search', 18)}Rechercher<span class="c">/</span></button>
+      <button class="nav" data-act="search">${ico('search', 18)}Aller à<span class="c">/</span></button>
       <button class="nav" data-act="chat">${ico('chat', 18)}Discuter avec l’IA</button>
       <div class="bottom"><span data-sync class="sync"></span><span data-synct style="flex:1"></span><button class="ib" data-act="settings" aria-label="Réglages">${ico('set')}</button></div>
     </aside>
     <main class="main"><div class="col">
       <header class="top"><div class="tt"><div class="kick" id="kick"></div><h1 id="ttl"></h1></div>
-        <div class="acts"><button class="ib" data-act="chat" aria-label="Discuter avec l’IA" title="Discuter avec l’IA">${ico('chat')}</button><button class="ib net-b" data-act="reseau" aria-label="Vue réseau" title="Vue réseau">${ico('net')}</button><button class="ib" data-act="sync" aria-label="Synchroniser"><span data-sync class="sync"></span></button><button class="ib" data-act="search" aria-label="Rechercher">${ico('search')}</button><button class="ib" data-act="settings" aria-label="Réglages">${ico('set')}</button></div>
+        <div class="acts"><button class="ib" data-act="chat" aria-label="Discuter avec l’IA" title="Discuter avec l’IA">${ico('chat')}</button><button class="ib net-b" data-act="reseau" aria-label="Vue réseau" title="Vue réseau">${ico('net')}</button><button class="ib" data-act="sync" aria-label="Synchroniser"><span data-sync class="sync"></span></button><button class="ib" data-act="search" aria-label="Aller à une note">${ico('search')}</button><button class="ib" data-act="settings" aria-label="Réglages">${ico('set')}</button></div>
       </header>
       <div id="view"></div>
       <nav class="apps" aria-label="Mes applis">${APPS.map(([n, e, u]) => `<a href="${u}" target="_blank" rel="noopener" title="${n}" aria-label="${n}">${e}</a>`).join('')}<a href="#" data-act="work" title="Lancer ma session de travail" aria-label="Lancer ma session de travail">🛠️</a></nav>
-      <p class="foot">Cerveau · v2.9.5</p>
+      <p class="foot">Cerveau · v2.10.0</p>
     </div></main>
     <nav class="tabs">
       <button data-view="today">${ico('today')}Aujourd’hui</button><button data-view="agenda">${ico('cal')}Agenda</button><button data-view="afaire">${ico('task')}À faire</button>
@@ -1161,7 +1161,7 @@ document.addEventListener('click', e => {
   const cl = e.target.closest('[data-classify]'); if (cl) return classify(cl.dataset.classify, false);
   const op = e.target.closest('[data-open]'); if (op) { e.preventDefault(); return openNote(op.dataset.open); }
 });
-// Raccourcis clavier (ordinateur) : N = capturer, / = rechercher
+// Raccourcis clavier (ordinateur) : N = capturer, / = aller à
 addEventListener('keydown', e => {
   if (e.ctrlKey || e.metaKey || e.altKey || /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName) || (ov && !ov.hidden)) return;
   if (e.key === 'n' || e.key === 'N') { e.preventDefault(); capture(); }
@@ -1646,13 +1646,33 @@ function review() {
   on('#rOk', () => { UI.review = today(); saveUI(); vibrate(); toast('Revue faite. À la semaine prochaine !'); closeLayer(() => render()); });
 }
 
-/* ---------- Recherche ---------- */
+/* ---------- Aller à (ouverture rapide) ----------
+   Quelques lettres d'un titre : Entrée ouvre la première note ; si aucun titre ne correspond, Entrée la crée. */
+const GOTO = [
+  ['Journal du jour', 'journal', () => journal()],
+  ['Capturer', 'inbox', () => capture()],
+  ['Vue réseau', 'net', () => closeLayer(() => openNet())],
+  ['Nouveau projet', 'proj', () => newProject()],
+  ['Revue de la semaine', 'review', () => review()],
+];
 function search() {
-  const pan = layer('Rechercher', `<label class="search">${ico('search')}<input id="sQ" placeholder="Titre, mot, #étiquette…" autocomplete="off"></label><div id="sR"></div>`);
+  const pan = layer('Aller à', `<label class="search">${ico('search')}<input id="sQ" placeholder="Titre d’une note, ou commande…" autocomplete="off" enterkeyhint="go"></label><div id="sR"></div>`);
   const q = $('#sQ', pan), out = $('#sR', pan);
-  const draw = () => { const v = q.value.trim(); if (!v) { out.innerHTML = '<p class="empty">Tape quelques lettres.</p>'; return; } const L = hits(v); out.innerHTML = hudm(`Recherche ▸ « ${esc(v)} »`, `<b>${z3(L.length)}</b> résultat${L.length > 1 ? 's' : ''}`) + `<div class="list">${L.length ? L.map(noteRow).join('') : '<p class="empty">Rien trouvé.</p>'}</div>`; };
+  let acts = [];
+  const row = (i, icon, t, s) => `<button class="row" data-qa="${i}"><span class="gl">${ico(icon, 16)}</span><span class="m"><span class="t">${esc(t)}</span><span class="s">${s}</span></span></button>`;
+  const draw = () => {
+    const v = q.value.trim().replace(/\s+/g, ' '), k = norm(v), L = k ? hits(v) : [];
+    const named = L.filter(x => norm(x.title).includes(k)), inText = L.filter(x => !named.includes(x));
+    const cmds = GOTO.filter(c => norm(c[0]).includes(k));
+    acts = cmds.map(c => c[2]);
+    let h = named.map(noteRow).join('') + cmds.map((c, i) => row(i, c[1], c[0], 'Commande')).join('');
+    if (k && !named.some(x => norm(x.title) === k)) { acts.push(() => editNote(null, { title: v })); h += row(acts.length - 1, 'plus', `Créer « ${v} »`, 'Nouvelle note'); }
+    // Entrée : 1re note au titre proche, sinon commande, sinon création
+    out.innerHTML = `<div class="list">${h}</div>` + (inText.length ? hudm('Dans le texte', `<b>${z3(inText.length)}</b>`) + `<div class="list">${inText.map(noteRow).join('')}</div>` : '');
+  };
+  out.onclick = e => { const b = e.target.closest('[data-qa]'); if (b) { e.preventDefault(); e.stopPropagation(); acts[+b.dataset.qa]?.(); } };
   q.oninput = draw; draw(); setTimeout(() => q.focus(), 120);
-  q.onkeydown = e => { if (e.key === 'Enter') { const f = $('[data-open]', out); if (f) openNote(f.dataset.open); } };
+  q.onkeydown = e => { if (e.key === 'Enter' && q.value.trim()) { e.preventDefault(); $('.list button', out)?.click(); } };
 }
 
 /* ---------- Discuter avec l'IA (API Claude, appelée depuis cet appareil avec ta clé) ----------

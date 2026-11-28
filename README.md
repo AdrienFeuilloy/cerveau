@@ -112,6 +112,7 @@ Les réponses s'écrivent sur la ligne `=>` (retours à la ligne notés ` ⏎ `)
 - **À faire** : uniquement des actions à cocher, **par date** ou **par projet** (et domaines), plus l'historique des tâches faites.
 - **Boîte** : ce qui a été capturé et attend d'être trié.
 - **Notes** : ce qu'on garde (idées, ressources, domaines, notes de projets, journal, archives).
+- **Aller à** (loupe, ou touche `/` sur ordinateur) : taper quelques lettres d'un titre, Entrée ouvre la note ; si aucun titre ne correspond, Entrée la crée. Commandes : Journal du jour, Capturer, Vue réseau, Nouveau projet, Revue de la semaine.
 
 ## Liens avec les autres applis (même dépôt privé, lecture seule)
 
