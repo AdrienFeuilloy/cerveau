@@ -757,7 +757,7 @@ function shell() {
       </header>
       <div id="view"></div>
       <nav class="apps" aria-label="Mes applis">${APPS.map(([n, e, u]) => `<a href="${u}" target="_blank" rel="noopener" title="${n}" aria-label="${n}">${e}</a>`).join('')}<a href="#" data-act="work" title="Lancer ma session de travail" aria-label="Lancer ma session de travail">🛠️</a></nav>
-      <p class="foot">Cerveau · v2.9.3</p>
+      <p class="foot">Cerveau · v2.9.4</p>
     </div></main>
     <nav class="tabs">
       <button data-view="today">${ico('today')}Aujourd’hui</button><button data-view="agenda">${ico('cal')}Agenda</button><button data-view="afaire">${ico('task')}À faire</button>
